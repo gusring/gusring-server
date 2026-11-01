@@ -1,0 +1,96 @@
+// 1단계 스키마 — docs/phase1-design.md
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Lang {
+  ko
+  en
+  zh
+  ja
+  vi
+
+  @@map("lang")
+}
+
+enum FeedbackType {
+  general
+  translation
+  guide
+  bug
+
+  @@map("feedback_type")
+}
+
+enum FeedbackStatus {
+  new
+  read
+  resolved
+
+  @@map("feedback_status")
+}
+
+enum EventType {
+  landing_view
+  list_view
+  form_view
+  form_download
+  language_select
+  search
+  category_filter
+  feedback_click
+  detail_time
+  fill_start
+  field_open
+  fill_preview
+  fill_png_save
+  fill_print
+  fill_reset
+
+  @@map("event_type")
+}
+
+model Feedback {
+  id        String         @id @default(uuid()) @db.Uuid
+  lang      Lang
+  formKey   String?        @map("form_key")
+  formNo    Int?           @map("form_no") @db.SmallInt
+  fieldId   String?        @map("field_id")
+  type      FeedbackType   @default(general)
+  message   String
+  status    FeedbackStatus @default(new)
+  ipHash    String?        @map("ip_hash") @db.Char(64)
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([formKey])
+  @@index([ipHash, createdAt])
+  @@map("feedback")
+}
+
+model UsageEvent {
+  id          BigInt    @id @default(autoincrement())
+  type        EventType
+  lang        Lang?
+  formKey     String?   @map("form_key")
+  formNo      Int?      @map("form_no") @db.SmallInt
+  fieldId     String?   @map("field_id")
+  category    String?
+  searchTerm  String?   @map("search_term")
+  resultCount Int?      @map("result_count")
+  durationSec Int?      @map("duration_sec")
+  visitorId   String    @map("visitor_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([type, createdAt])
+  @@index([formKey, type])
+  @@index([createdAt])
+  @@map("usage_event")
+}
