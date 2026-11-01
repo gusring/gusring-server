@@ -16,5 +16,10 @@ export default defineConfig({
     globalSetup: ['tests/global-setup.ts'],
     // 같은 DB를 쓰므로 파일을 하나씩 돌린다
     fileParallelism: false,
+    coverage: {
+      include: ['src/**'],
+      exclude: ['src/generated/**', 'src/server.ts'],
+      reporter: ['text'],
+    },
   },
 });

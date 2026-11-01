@@ -33,26 +33,31 @@ feedbackRouter.post('/', async (req, res) => {
   }
 
   const ipHash = hashIp(req.ip);
-  if (ipHash) {
-    const recent = await db().feedback.count({
-      where: { ipHash, createdAt: { gte: new Date(Date.now() - RATE_WINDOW_MS) } },
-    });
-    if (recent >= RATE_MAX) {
-      throw new HttpError(429, 'TOO_MANY_REQUESTS', '잠시 후 다시 보내 주세요.');
-    }
-  }
 
-  const created = await db().feedback.create({
-    data: {
-      lang: body.lang,
-      formKey: body.formKey ?? null,
-      formNo: body.formNo ?? null,
-      fieldId: body.fieldId ?? null,
-      type: body.type,
-      message: body.message,
-      ipHash,
-    },
-    select: { id: true },
+  // "최근 몇 건인지 세기"와 "저장"을 한 트랜잭션에서 하고, 같은 ip_hash끼리는 잠금으로 줄을 세운다.
+  // 잠금이 없으면 동시에 온 요청들이 모두 0건으로 보고 제한을 넘는다 (테스트로 확인: 10건 중 8건 저장).
+  const created = await db().$transaction(async (tx) => {
+    if (ipHash) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ipHash}))`;
+      const recent = await tx.feedback.count({
+        where: { ipHash, createdAt: { gte: new Date(Date.now() - RATE_WINDOW_MS) } },
+      });
+      if (recent >= RATE_MAX) {
+        throw new HttpError(429, 'TOO_MANY_REQUESTS', '잠시 후 다시 보내 주세요.');
+      }
+    }
+    return tx.feedback.create({
+      data: {
+        lang: body.lang,
+        formKey: body.formKey ?? null,
+        formNo: body.formNo ?? null,
+        fieldId: body.fieldId ?? null,
+        type: body.type,
+        message: body.message,
+        ipHash,
+      },
+      select: { id: true },
+    });
   });
   res.status(201).json({ id: created.id });
 });

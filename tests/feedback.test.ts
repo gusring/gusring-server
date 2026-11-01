@@ -74,6 +74,17 @@ describe('POST /feedback', () => {
     expect(await db().feedback.count()).toBe(RATE_MAX);
   });
 
+  it(`동시에 10건을 보내도 ${RATE_MAX}건까지만 저장된다`, async () => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => request(app).post('/feedback').send({ lang: 'ko', message: `동시 ${i}` })),
+    );
+    // 같은 사람 요청은 줄을 세워 처리 → 정확히 RATE_MAX건 저장, 나머지는 429
+    const created = results.filter((r) => r.status === 201).length;
+    expect(created).toBe(RATE_MAX);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(10 - RATE_MAX);
+    expect(await db().feedback.count()).toBe(RATE_MAX);
+  });
+
   it('10분이 지난 글은 제한에 세지 않는다', async () => {
     await request(app).post('/feedback').send({ lang: 'ko', message: '첫 글' });
     const rows = await db().$queryRawUnsafe<{ ip_hash: string }[]>('SELECT ip_hash FROM feedback LIMIT 1');
