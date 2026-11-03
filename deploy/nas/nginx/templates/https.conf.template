@@ -1,0 +1,78 @@
+# 인증서가 있을 때 쓰는 설정. ${API_DOMAIN}만 치환된다 (nginx/select-conf.sh)
+
+# 응답 헤더에 Nginx 버전을 드러내지 않는다
+server_tokens off;
+
+# 같은 IP의 요청 속도 제한 (도배 막기)
+limit_req_zone $binary_remote_addr zone=events:10m rate=60r/m;
+limit_req_zone $binary_remote_addr zone=feedback:10m rate=10r/m;
+limit_req_status 429;
+
+# Docker 내부 DNS. 서버 컨테이너가 다시 떠서 IP가 바뀌어도 따라간다
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+# 모르는 주소(naco.kro.kr, IP 직접 접속 등)는 응답 없이 끊는다
+server {
+    listen 80 default_server;
+    return 444;
+}
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${API_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:gusring_ssl:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    client_max_body_size 128k;
+
+    set $app http://app:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    # 클라이언트가 보낸 X-Forwarded-For는 버리고, Nginx가 본 접속 IP 하나만 넘긴다 (서버는 TRUST_PROXY=1)
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 30s;
+
+    error_page 429 = @too_many;
+    location @too_many {
+        default_type application/json;
+        return 429 '{"error":{"code":"TOO_MANY_REQUESTS","message":"Too many requests"}}';
+    }
+
+    location = /events {
+        limit_req zone=events burst=40 nodelay;
+        proxy_pass $app;
+    }
+    location = /feedback {
+        limit_req zone=feedback burst=5 nodelay;
+        proxy_pass $app;
+    }
+    location / {
+        proxy_pass $app;
+    }
+}

@@ -1,0 +1,26 @@
+# 인증서를 받기 전에 쓰는 설정: 인증 확인 파일만 내주고 나머지는 503
+
+# 응답 헤더에 Nginx 버전을 드러내지 않는다
+server_tokens off;
+
+server {
+    listen 80 default_server;
+    return 444;
+}
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        default_type application/json;
+        return 503 '{"error":{"code":"NOT_READY","message":"HTTPS certificate not issued yet"}}';
+    }
+}

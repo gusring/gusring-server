@@ -1,0 +1,5 @@
+# 컨테이너(리눅스) 안에서 쓰는 파일은 Windows에서도 LF 유지
+*.sh       text eol=lf
+*.template text eol=lf
+deploy/**  text eol=lf
+Dockerfile text eol=lf
