@@ -6,8 +6,8 @@ async function freshApp(env: Record<string, string | undefined>) {
   vi.resetModules();
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
   const { createApp } = await import('../src/app.js');
-  const { disconnectDb } = await import('../src/db.js');
-  return { app: createApp(), disconnectDb };
+  const { disconnectPrisma } = await import('../src/config/prisma.js');
+  return { app: createApp(), disconnectPrisma };
 }
 
 afterEach(() => {
@@ -17,9 +17,9 @@ afterEach(() => {
 describe('설정 실수', () => {
   it('ADMIN_TOKEN이 없으면 관리자 API는 503 (모든 토큰 거부)', async () => {
     const { app } = await freshApp({ ADMIN_TOKEN: '' });
-    const res = await request(app).get('/admin/feedback').set('Authorization', 'Bearer ');
+    const res = await request(app).get('/api/v1/admin/feedbacks').set('Authorization', 'Bearer ');
     expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe('ADMIN_DISABLED');
+    expect(res.body.error.code).toBe('AUTH_ADMIN_DISABLED');
   });
 
   it('PORT가 숫자가 아니면 서버가 뜨지 않는다', async () => {
@@ -32,13 +32,13 @@ describe('설정 실수', () => {
 describe('DB 장애', () => {
   it('DB에 못 붙으면 500, 내부 정보(주소·스택)는 응답에 안 나간다', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { app, disconnectDb } = await freshApp({ DATABASE_URL: 'postgresql://nobody:secret@localhost:5999/none' });
-    const res = await request(app).post('/feedback').send({ lang: 'ko', message: '테스트' });
+    const { app, disconnectPrisma } = await freshApp({ DATABASE_URL: 'postgresql://nobody:secret@localhost:5999/none' });
+    const res = await request(app).post('/api/v1/feedbacks').send({ lang: 'ko', message: '테스트' });
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: '서버 오류가 발생했습니다.' } });
+    expect(res.body).toEqual({ success: false, message: '서버 오류가 발생했습니다.', error: { code: 'COMMON_INTERNAL_ERROR' } });
     expect(JSON.stringify(res.body)).not.toMatch(/5999|secret|nobody/);
     expect(spy).toHaveBeenCalled(); // 서버 로그에는 남긴다
-    await disconnectDb();
+    await disconnectPrisma();
     spy.mockRestore();
   });
 
@@ -51,15 +51,15 @@ describe('DB 장애', () => {
 describe('요청 크기·CORS', () => {
   it('100kb를 넘는 JSON은 413', async () => {
     const { app } = await freshApp({});
-    const res = await request(app).post('/feedback').send({ lang: 'ko', message: 'a'.repeat(120_000) });
+    const res = await request(app).post('/api/v1/feedbacks').send({ lang: 'ko', message: 'a'.repeat(120_000) });
     expect(res.status).toBe(413);
-    expect(res.body.error.code).toBe('BAD_REQUEST');
+    expect(res.body.error.code).toBe('COMMON_PAYLOAD_TOO_LARGE');
   });
 
   it('허용한 주소의 사전 요청(preflight)은 204와 허용 헤더', async () => {
     const { app } = await freshApp({});
     const res = await request(app)
-      .options('/feedback')
+      .options('/api/v1/feedbacks')
       .set('Origin', 'http://localhost:3000')
       .set('Access-Control-Request-Method', 'POST')
       .set('Access-Control-Request-Headers', 'content-type');
@@ -70,7 +70,7 @@ describe('요청 크기·CORS', () => {
   it('관리자 API 사전 요청도 토큰 검사 전에 CORS가 처리한다 (허용 안 된 주소엔 헤더 없음)', async () => {
     const { app } = await freshApp({});
     const res = await request(app)
-      .options('/admin/feedback')
+      .options('/api/v1/admin/feedbacks')
       .set('Origin', 'https://evil.example.com')
       .set('Access-Control-Request-Method', 'GET');
     expect(res.headers['access-control-allow-origin']).toBeUndefined();

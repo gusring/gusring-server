@@ -4,5 +4,5 @@ import { env } from './config/env.js';
 const app = createApp();
 
 app.listen(env.port, () => {
-  console.log(`gusring-server listening on http://localhost:${env.port} (${env.nodeEnv})`);
+  console.info(`gusring-server listening on http://localhost:${env.port} (${env.nodeEnv})`);
 });
