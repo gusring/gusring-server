@@ -38,7 +38,8 @@ NAS:
 cd /share/Container/gusring
 cp .env.example .env && chmod 600 .env   # TAG, 비밀값 3개 채우기
 docker compose up -d                     # 인증서 없으면 Nginx는 인증서 받기용 HTTP 설정으로 뜬다
-sh issue-cert.sh                         # 도메인 A 레코드가 걸린 뒤. ZeroSSL EAB 키 입력
+bash issue-cert.sh                       # (처음 한 번) ZeroSSL 계정 등록용. EAB 키 입력
+bash issue-cert-dns.sh                   # 실제 발급은 DNS 인증으로 (아래 "인증서")
 ```
 
 ## 새 버전 올리기
@@ -54,8 +55,38 @@ docker compose logs --tail 50 app nginx
 curl -s https://gusring.kro.kr/health
 ```
 
+## 인증서 (ZeroSSL, DNS 인증) — 손으로 갱신
+
+학교 네트워크가 **해외에서 들어오는 접속을 막아**(2026-11-03, check-host.net 해외 46~47곳 모두 시간 초과.
+`.7`뿐 아니라 TIMIROOM `.8`도 같음) ZeroSSL이 HTTP(80)로 확인하러 들어오지 못한다.
+그래서 도메인 DNS에 TXT 기록을 넣는 **DNS 인증**으로 받는다. 학교 안에서는 HTTP 확인이 되는 것처럼 보이니 속지 말 것.
+
+- 첫 발급 2026-11-03, **만료 2027-02-01** (90일짜리)
+- certbot 컨테이너의 자동 갱신은 HTTP 방식이라 **실패한다**. 만료 30일 전쯤(1월 초) 손으로 갱신한다
+
+갱신 순서:
+
+```bash
+cd /share/Container/gusring
+bash issue-cert-dns.sh            # 백그라운드로 시작 (TXT 기록이 보일 때까지 30분 기다림)
+bash issue-cert-dns.sh status     # 넣을 TXT 값 확인
+```
+
+1. 내도메인.한국 → 도메인 관리 → `gusring.kro.kr` [수정] → TXT(SPF) 체크, 이름 `_acme-challenge`, 값 = status에 나온 값 → 보안코드 → 수정하기
+2. 네임서버 두 곳(`1.ns.dnsze.com`, `2.ns.dnsze.com`)에 보이면 자동으로 발급된다 (이번에는 저장 후 약 10분)
+3. `docker compose restart nginx`
+
+해외 접속이 열리면(학교 전산실에 `.7` 80번 포트 해외 허용 요청) 자동 갱신으로 바꿀 수 있다.
+
+## 도메인 연장 — 3개월마다
+
+`gusring.kro.kr`(내도메인.한국)은 **3개월짜리**다. 첫 등록 2026-11-03, **만료 2027-02-03**.
+만료 전에 내도메인.한국 → 도메인 관리에서 연장한다. 놓치면 주소가 사라져 API가 끊긴다.
+
 ## 주의
 
 - `naco-llm-nginx`(꺼져 있음)도 `223.194.166.7`로 설정돼 있다. 다시 켜면 IP가 겹친다
-- 인증서는 certbot 컨테이너가 12시간마다 갱신을 확인하고, Nginx는 6시간마다 다시 읽는다
+- Nginx는 6시간마다 설정을 다시 읽는다 (갱신한 인증서는 늦어도 6시간 안에 적용, 바로 하려면 restart)
 - `.env`에는 DB 비밀번호·관리자 토큰이 있다. 권한 600 유지, 저장소에 올리지 않는다
+- QNAP은 `internal: true` 네트워크를 만들지 못한다 (NAT 규칙 추가 실패)
+- QNAP에는 `stty`가 없다. 스크립트에서 입력을 숨길 때는 bash `read -s`
