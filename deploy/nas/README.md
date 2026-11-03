@@ -44,8 +44,16 @@ bash issue-cert-dns.sh                   # 실제 발급은 DNS 인증으로 (�
 
 ## 새 버전 올리기
 
-로컬에서 새 `TAG`로 이미지 두 개를 빌드해 `docker load`까지 한 뒤, NAS `.env`의 `TAG`만 바꾸고 `docker compose up -d`.
-마이그레이션은 `migrate`가 서버보다 먼저 한 번 돈다.
+저장소 루트에서 (Git Bash, 로컬 테스트 DB `npm run db:up` 필요):
+
+```bash
+bash deploy/nas/deploy.sh            # 현재 커밋 배포 (약 2분)
+bash deploy/nas/deploy.sh rollback   # 바로 전 버전으로 (한 번 더 하면 다시 최신으로)
+```
+
+커밋 안 된 변경이 있으면 멈춘다 → 타입 검사·테스트 → 이미지 빌드 → NAS DB 백업 → 이미지 전송
+→ 설정 복사(`.env` 제외) → `TAG` 바꾸고 재시작(이전 값은 `PREV_TAG`) → HTTPS 확인.
+마이그레이션은 `migrate`가 서버보다 먼저 한 번 돈다. 2026-11-03 실제 배포·되돌리기 양방향 확인.
 
 ## 확인
 
