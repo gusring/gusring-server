@@ -68,9 +68,11 @@ const VISITOR_KEY = 'gusring_visitor_id';
 let memoryVisitorId: string | null = null;
 
 function randomUuid(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const c = typeof crypto !== 'undefined' ? crypto : undefined;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
   const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
+  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256); // 아주 오래된 브라우저: 통계용이라 이 정도면 된다
   b[6] = (b[6]! & 0x0f) | 0x40; // 버전 4
   b[8] = (b[8]! & 0x3f) | 0x80;
   const h = Array.prototype.map.call(b, (x: number) => (x + 0x100).toString(16).slice(1)).join('');
@@ -158,8 +160,11 @@ export async function flush(useBeacon = false): Promise<void> {
     if (useBeacon && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }));
     } else {
+      // fetch가 없거나 바로 예외를 던져도 화면으로 번지지 않게 Promise 안에서 부른다
       sends.push(
-        fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body, keepalive: true }).catch(() => undefined),
+        Promise.resolve()
+          .then(() => fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body, keepalive: true }))
+          .catch(() => undefined),
       );
     }
   }
