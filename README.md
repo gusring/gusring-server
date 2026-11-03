@@ -42,7 +42,7 @@ npm run dev            # http://localhost:4000
 
 ## API
 
-명세: [docs/api.md](docs/api.md) · Swagger `/api-docs` (운영 https://gusring.kro.kr/api-docs) · ERD [docs/erd.md](docs/erd.md) · 규칙 [docs/convention.md](docs/convention.md)
+명세: [docs/api.md](docs/api.md) · 프론트 연결 [docs/frontend-integration.md](docs/frontend-integration.md) · 성능 [docs/performance.md](docs/performance.md) · Swagger `/api-docs` (운영 https://gusring.kro.kr/api-docs) · ERD [docs/erd.md](docs/erd.md) · 규칙 [docs/convention.md](docs/convention.md)
 
 ```jsonc
 // 성공
@@ -77,6 +77,8 @@ src/
 └── generated/prisma/       # Prisma 생성 코드 (git 제외)
 prisma/                     # schema.prisma · migrations
 tests/                      # 실제 DB에 붙인 테스트
+examples/gusring-api.ts     # 프론트에 복사해 쓰는 연결 모듈 (docs/frontend-integration.md)
+scripts/perf/               # 통계 성능 시험 (docs/performance.md)
 deploy/nas/                 # NAS 배포 (Nginx·인증서·백업) — deploy/nas/README.md
 docker-compose.yml          # 개발·테스트 DB
 ```
