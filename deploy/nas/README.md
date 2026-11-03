@@ -55,6 +55,28 @@ docker compose logs --tail 50 app nginx
 curl -s https://gusring.kro.kr/health
 ```
 
+## DB 백업·복원
+
+`backup` 컨테이너가 매일 4시(한국 시간) 이후 하루 한 번 `backups/gusring-YYYY-MM-DD.sql.gz`로 저장하고, 14일 지난 파일은 지운다.
+파일 권한은 600 (피드백 본문에 개인정보가 섞일 수 있음). NAS 밖으로 복사해 두려면 이 폴더를 가져가면 된다.
+
+```bash
+docker compose exec backup sh /backup-loop.sh now     # 지금 바로 한 번 (예: 배포 전)
+docker compose logs --tail 20 backup                  # 백업 기록
+```
+
+복원 (운영 DB를 덮어쓰기 전에 꼭 임시 DB로 먼저 확인):
+
+```bash
+f=gusring-YYYY-MM-DD.sql.gz
+docker compose exec db createdb -U gusring gusring_restore_test
+docker compose exec -T backup sh -c "gunzip -c /backups/$f | psql -v ON_ERROR_STOP=1 -d gusring_restore_test"
+# 확인 후 운영으로 바꾸려면: app 멈춤 → gusring DB 지우고 같은 방법으로 복원 → app 시작
+docker compose exec db dropdb -U gusring gusring_restore_test
+```
+
+2026-11-03 확인: 로컬에서 다국어 데이터 503건 백업→복원 후 건수·본문 해시·마이그레이션 기록 일치, NAS에서 운영 DB 복원 시험 일치.
+
 ## 인증서 (ZeroSSL, DNS 인증) — 손으로 갱신
 
 학교 네트워크가 **해외에서 들어오는 접속을 막아**(2026-11-03, check-host.net 해외 46~47곳 모두 시간 초과.

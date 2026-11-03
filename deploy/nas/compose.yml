@@ -95,6 +95,28 @@ services:
       resources:
         limits: { memory: 128m }
 
+  backup:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: gusring
+      PGDATABASE: gusring
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: KST-9            # 한국 시간 (tzdata 없이 쓰는 POSIX 표기)
+      BACKUP_HOUR: "4"     # 매일 4시 이후 하루 한 번
+      KEEP_DAYS: "14"
+    volumes:
+      - ./backups:/backups
+      - ./backup/backup-loop.sh:/backup-loop.sh:ro
+    entrypoint: ["sh", "/backup-loop.sh"]
+    networks: [internal]
+    depends_on:
+      db: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
 networks:
   internal: {}
   egress: {}
