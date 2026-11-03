@@ -20,7 +20,8 @@ server {
         root /var/www/certbot;
     }
     location / {
+        # 앱과 같은 실패 형식 (src/constants/error-code.ts의 COMMON_NOT_READY)
         default_type application/json;
-        return 503 '{"error":{"code":"NOT_READY","message":"HTTPS certificate not issued yet"}}';
+        return 503 '{"success":false,"message":"아직 준비 중입니다.","error":{"code":"COMMON_NOT_READY"}}';
     }
 }

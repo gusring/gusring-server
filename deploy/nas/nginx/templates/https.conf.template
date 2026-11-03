@@ -60,15 +60,16 @@ server {
 
     error_page 429 = @too_many;
     location @too_many {
+        # 앱과 같은 실패 형식 (src/constants/error-code.ts의 COMMON_TOO_MANY_REQUESTS)
         default_type application/json;
-        return 429 '{"error":{"code":"TOO_MANY_REQUESTS","message":"Too many requests"}}';
+        return 429 '{"success":false,"message":"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.","error":{"code":"COMMON_TOO_MANY_REQUESTS"}}';
     }
 
-    location = /events {
+    location ~* ^/api/v1/events/?$ {  # Express는 대소문자·끝 / 를 구분하지 않으므로 같게 맞춘다
         limit_req zone=events burst=40 nodelay;
         proxy_pass $app;
     }
-    location = /feedback {
+    location ~* ^/api/v1/feedbacks/?$ {
         limit_req zone=feedback burst=5 nodelay;
         proxy_pass $app;
     }
