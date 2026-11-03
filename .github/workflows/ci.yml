@@ -2,9 +2,8 @@
 name: CI
 
 on:
+  # 팀원은 같은 저장소에 브랜치로 올리므로 모든 브랜치 푸시에서 돈다 (PR 전에도 확인)
   push:
-    branches: [main]
-  pull_request:
 
 jobs:
   test:
