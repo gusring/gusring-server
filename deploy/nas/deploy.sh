@@ -85,6 +85,8 @@ step "TAG 바꾸고 재시작"
   echo \"TAG: \$cur → $TAG\"
   docker compose config --quiet
   docker compose up -d --wait 2>&1 | grep -vE '^inserted' | tail -3
+  # 설정 파일만 바뀌면 up이 Nginx를 다시 띄우지 않는다 → 설정을 다시 골라 무중단으로 다시 읽기 (nginx -t 실패 시 그대로 둠)
+  docker compose exec -T nginx sh -c 'sh /gusring/select-conf.sh && nginx -s reload' 2>&1 | grep -E 'gusring|test is successful|emerg' || true
   docker compose ps --format '{{.Service}} {{.Status}}'"
 
 step "확인"
