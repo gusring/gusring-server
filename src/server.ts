@@ -6,6 +6,10 @@ const app = createApp();
 
 const server = app.listen(env.port, () => {
   console.info(`gusring-server listening on http://localhost:${env.port} (${env.nodeEnv})`);
+  // 1단계 관리자 인증은 토큰 하나뿐이라 짧으면 맞혀 볼 수 있다 (만드는 법: deploy/nas/.env.example)
+  if (env.nodeEnv === 'production' && env.adminToken && env.adminToken.length < 32) {
+    console.error('경고: ADMIN_TOKEN이 32자보다 짧습니다. 길고 무작위인 값으로 바꾸세요.');
+  }
 });
 
 // docker stop·배포 때 SIGTERM이 온다. 컨테이너에서 node는 PID 1이라 처리기가 없으면 신호를 무시하고

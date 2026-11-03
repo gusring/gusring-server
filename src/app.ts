@@ -9,12 +9,14 @@ import { eventRouter } from './domains/event/event.route.js';
 import { adminStatsRouter } from './domains/stats/stats.route.js';
 import { requireAdmin } from './middlewares/admin-auth.js';
 import { errorHandler, notFound } from './middlewares/error-handler.js';
+import { noStore, securityHeaders } from './middlewares/security-headers.js';
 
 // 앱 구성만 담당한다. 서버 실행(listen)은 server.ts에서.
 export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  app.use(securityHeaders);
   // 앞단 프록시(Nginx) 개수만큼 X-Forwarded-For를 믿고 req.ip를 정한다
   app.set('trust proxy', env.trustProxy);
   app.use(cors({ origin: env.corsOrigins }));
@@ -29,7 +31,7 @@ export function createApp() {
   const v1 = express.Router();
   v1.use('/feedbacks', feedbackRouter);
   v1.use('/events', eventRouter);
-  v1.use('/admin', requireAdmin);
+  v1.use('/admin', noStore, requireAdmin);
   v1.use('/admin/feedbacks', adminFeedbackRouter);
   v1.use('/admin/stats', adminStatsRouter);
   app.use('/api/v1', v1);

@@ -37,6 +37,22 @@ describe('CORS', () => {
   });
 });
 
+describe('보안 헤더', () => {
+  it('모든 응답에 iframe 금지·Referrer 없음, X-Powered-By 없음', async () => {
+    for (const path of ['/health', '/api-docs/', '/nope']) {
+      const res = await request(app).get(path);
+      expect(res.headers['x-frame-options'], path).toBe('DENY');
+      expect(res.headers['referrer-policy'], path).toBe('no-referrer');
+      expect(res.headers['x-powered-by'], path).toBeUndefined();
+    }
+  });
+
+  it('관리자 응답은 캐시에 남기지 않는다 (인증 실패 응답 포함), 공개 응답은 그대로', async () => {
+    expect((await request(app).get('/api/v1/admin/feedbacks')).headers['cache-control']).toBe('no-store');
+    expect((await request(app).get('/health')).headers['cache-control']).toBeUndefined();
+  });
+});
+
 describe('JSON 본문', () => {
   it('깨진 JSON은 500이 아니라 400 COMMON_BAD_REQUEST', async () => {
     const res = await request(app).post('/api/v1/feedbacks').set('Content-Type', 'application/json').send('{bad');
