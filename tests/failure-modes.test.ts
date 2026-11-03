@@ -42,6 +42,19 @@ describe('DB 장애', () => {
     spy.mockRestore();
   });
 
+  it('DB 장애 때 관리자 변경·삭제는 404(없음)로 속이지 않고 500', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { app, disconnectPrisma } = await freshApp({ DATABASE_URL: 'postgresql://nobody:secret@localhost:5999/none' });
+    const id = '33333333-3333-4333-8333-333333333333';
+    const auth = { Authorization: 'Bearer test-admin-token' };
+    const patch = await request(app).patch(`/api/v1/admin/feedbacks/${id}`).set(auth).send({ status: 'read' });
+    const del = await request(app).delete(`/api/v1/admin/feedbacks/${id}`).set(auth);
+    expect([patch.status, del.status]).toEqual([500, 500]);
+    expect(del.body.error.code).toBe('COMMON_INTERNAL_ERROR');
+    await disconnectPrisma();
+    spy.mockRestore();
+  });
+
   it('DB가 없어도 /health는 응답한다', async () => {
     const { app } = await freshApp({ DATABASE_URL: 'postgresql://nobody:secret@localhost:5999/none' });
     expect((await request(app).get('/health')).status).toBe(200);
