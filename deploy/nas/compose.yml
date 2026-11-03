@@ -3,7 +3,8 @@
 # 값은 같은 폴더의 .env (권한 600)에서 읽는다 → .env.example 참고
 #
 # 네트워크
-#   internal : 서버·DB·Nginx만. 인터넷과 끊김
+#   internal : 서버·DB·Nginx만. 외부 포트는 없다 (밖에서 들어오는 길은 Nginx 하나)
+#              QNAP은 internal: true 네트워크를 만들지 못해(NAT 규칙 추가 실패) 일반 bridge로 둔다
 #   egress   : certbot이 인증서 발급 서버에 나가는 용도
 #   public   : QNAP 고정 IP 네트워크(qnet). 구스링 Nginx만 전용 공인 IP(PUBLIC_IP)로 붙는다
 
@@ -95,8 +96,7 @@ services:
         limits: { memory: 128m }
 
 networks:
-  internal:
-    internal: true
+  internal: {}
   egress: {}
   public:
     external: true
