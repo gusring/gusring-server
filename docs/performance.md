@@ -39,6 +39,15 @@ NAS는 이보다 느릴 수 있어 배포 뒤 다시 잰다.
 최악 분포 데이터에서 바꾸기 전·후 응답(summary·daily × 기본·366일·하루)이 바이트 단위로 같았다.
 또 `tests/admin-stats.test.ts`가 +9시간이나 DISTINCT를 망가뜨리면 실패하는 것도 확인했다.
 
+### 다시 재기
+
+```bash
+psql "$DATABASE_URL" -f scripts/perf/seed-events.sql   # 현실 분포. 최악은 -v worst=1. 시험용 DB에만 (표를 비운다)
+BASE=http://localhost:4000 ADMIN_TOKEN=... bash scripts/perf/time-stats.sh
+```
+
+2026-11-03 스크립트 확인 때 최악 분포 daily 366일은 1.06초였다 (위 표 1.33초와 같은 쿼리, 실행마다 차이).
+
 ### 남은 것
 
 - 최악 분포의 daily 366일은 1.33초로 목표를 넘는다. 실제로는 방문 한 번에 이벤트가 여러 개라 현실 분포에 가깝다
