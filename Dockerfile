@@ -14,7 +14,13 @@ RUN npm ci --no-audit --no-fund
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build
+# 서버가 실제로 불러오는 파일만 추적해 /out에 모은다 (@vercel/nft).
+# npm ci --omit=dev로는 @prisma/client가 짝 패키지로 끌고 오는 prisma CLI·TypeScript가 안 빠져서 이렇게 한다.
+# package.json은 "type": "module"(ESM) 때문에 꼭 같이 넣는다.
+RUN npm run build \
+ && npx nft print dist/server.js > /tmp/files.txt \
+ && echo package.json >> /tmp/files.txt \
+ && mkdir /out && tar -cf - -T /tmp/files.txt | tar -xf - -C /out
 
 FROM deps AS migrate
 ENV NODE_ENV=production
@@ -24,12 +30,7 @@ CMD ["npx", "prisma", "migrate", "deploy"]
 FROM node:24.14.0-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY package.json package-lock.json ./
-# 운영 패키지만. postinstall(prisma generate)은 build 단계에서 이미 끝났으므로 건너뛴다
-# TODO: @prisma/client가 짝 패키지(peer)로 prisma CLI·TypeScript(약 300MB)까지 끌고 온다.
-#       --omit=peer로는 안 빠짐(루트 devDependency와 겹쳐서). 동작엔 문제없어 나중에 줄인다
-RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
-COPY --from=build /app/dist ./dist
+COPY --from=build /out/ ./
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
