@@ -63,32 +63,8 @@
 
 ## API
 
-공통: JSON, 에러는 `{ "error": { "code", "message" } }`.
+11-03부터 [api.md](api.md)로 옮겼다 (`/api/v1` 아래, 공통 응답 형식, 에러 코드 `{도메인}_{내용}`). 테이블은 [erd.md](erd.md).
 `formKey`는 영문 소문자·숫자·하이픈 1~64자, `formNo`는 1~999.
-
-### 공개
-
-| 메서드 | 경로 | 본문 | 응답 |
-|---|---|---|---|
-| POST | `/feedback` | `{ lang, formKey?, formNo?, fieldId?, type?, message, website? }` | `201 { id }`. `website`(숨은 칸)가 채워져 있으면 저장 안 하고 201. 같은 ip_hash 10분 5건 초과 시 429 |
-| POST | `/events` | `{ visitorId, events: [{ type, lang?, formKey?, formNo?, fieldId?, category?, searchTerm?, resultCount?, durationSec? }] }` 최대 20개 | `202 { accepted }` |
-
-이벤트 종류별 필수: `form_view`·`form_download`·`detail_time`·`fill_*`·`field_open`은 서식(`formKey` 또는 `formNo`), `field_open`은 `fieldId`, `search`는 `searchTerm`, `detail_time`은 `durationSec`.
-
-### 관리자 (`Bearer ADMIN_TOKEN`)
-
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| GET | `/admin/feedback?status=&lang=&formKey=&page=` | 최신순 20개씩 |
-| PATCH | `/admin/feedback/:id` | `{ status }` |
-| GET | `/admin/stats/summary?from=&to=` | 방문자·조회·다운로드·작성 수, 언어별 방문자 |
-| GET | `/admin/stats/forms?from=&to=&lang=` | 서식별 조회·다운로드 |
-| GET | `/admin/stats/daily?from=&to=` | 날짜별 방문자·조회·다운로드 |
-| GET | `/admin/stats/search?from=&to=` | 많이 찾은 검색어, 결과 0건 검색어 |
-| GET | `/admin/stats/fill?from=&to=` | 작성 도우미: 서식별 시작·완성 보기·저장/인쇄·초기화, 안내를 많이 연 칸 |
-| GET | `/admin/stats/export.csv?from=&to=` | 서식 × 언어별 조회·다운로드 (엑셀용 BOM 포함) |
-
-`from`/`to`는 `YYYY-MM-DD`(한국 시간), 기본 최근 30일, `to` 포함.
 
 ## 원칙
 

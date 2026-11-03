@@ -42,41 +42,20 @@ npm run dev            # http://localhost:4000
 
 ## API
 
-에러는 모두 `{ "error": { "code", "message", "details"? } }` 형식입니다. 입력값이 틀리면 `details`에 어느 칸이 왜 틀렸는지 나옵니다.
-
-### 공개
-
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| GET | `/health` | 서버 상태 |
-| POST | `/feedback` | 피드백 저장 → `201 { id }` |
-| POST | `/events` | 이용 이벤트 묶음 저장 (최대 20개) → `202 { accepted }`. `text/plain`(sendBeacon)도 받음 |
+명세: [docs/api.md](docs/api.md) · Swagger `/api-docs` (운영 https://gusring.kro.kr/api-docs) · ERD [docs/erd.md](docs/erd.md) · 규칙 [docs/convention.md](docs/convention.md)
 
 ```jsonc
-// POST /feedback
-{ "lang": "ja", "formKey": "birth-report", "fieldId": "childNameKo", "type": "guide", "message": "..." }
-
-// POST /events
-{ "visitorId": "<브라우저에 저장한 uuid>",
-  "events": [ { "type": "form_view", "lang": "vi", "formNo": 4 },
-              { "type": "search", "lang": "vi", "searchTerm": "khai sinh", "resultCount": 0 } ] }
+// 성공
+{ "success": true, "message": "피드백을 저장했습니다.", "data": { "id": "..." } }
+// 실패 (코드는 {도메인}_{내용})
+{ "success": false, "message": "입력값이 올바르지 않습니다.", "error": { "code": "COMMON_INVALID_INPUT", "details": [ ... ] } }
 ```
 
-### 관리자 (`Authorization: Bearer <ADMIN_TOKEN>`)
-
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| GET | `/admin/feedback?status=&lang=&formKey=&page=` | 피드백 목록 (최신순 20개씩) |
-| PATCH | `/admin/feedback/:id` | `{ "status": "read" }` 처리 상태 변경 |
-| DELETE | `/admin/feedback/:id` | 삭제 (본문에 개인정보가 적혀 있을 때) |
-| GET | `/admin/stats/summary` | 방문자·조회·다운로드·작성 수, 언어별 방문자 |
-| GET | `/admin/stats/forms?lang=` | 서식별 조회·다운로드 |
-| GET | `/admin/stats/daily` | 날짜별 (빈 날 0) |
-| GET | `/admin/stats/search` | 많이 찾은 검색어, 결과 0건 검색어 |
-| GET | `/admin/stats/fill` | 작성 도우미: 서식별 시작·완성·출력, 안내를 많이 연 칸 |
-| GET | `/admin/stats/export.csv` | 서식 × 언어별 표 (엑셀용) |
-
-통계는 모두 `?from=YYYY-MM-DD&to=YYYY-MM-DD` (한국 시간, `to` 포함, 기본 최근 30일, 최대 366일).
+| 구분 | 경로 |
+|---|---|
+| 공개 | `POST /api/v1/feedbacks`, `POST /api/v1/events` |
+| 관리자 (`Authorization: Bearer <ADMIN_TOKEN>`) | `/api/v1/admin/feedbacks`, `/api/v1/admin/stats/{summary,forms,daily,search,fill,export}` |
+| 버전 없음 | `GET /health`, `/api-docs`, `/api-docs.json` |
 
 ## 개인정보
 
@@ -88,15 +67,16 @@ npm run dev            # http://localhost:4000
 
 ```text
 src/
-├── app.ts                  # 앱 구성 (미들웨어·라우터 연결)
-├── server.ts               # 서버 실행
-├── db.ts                   # Prisma 클라이언트 (처음 쓸 때 연결)
-├── config/env.ts           # 환경변수
-├── routes/                 # health · feedback · events · admin-feedback · admin-stats
-├── middlewares/            # error-handler · admin-auth
-├── lib/                    # 입력 검증 · 공통 스키마 · IP 해시 · 기간(한국 시간)
+├── app.ts · server.ts      # 앱 구성 / 서버 실행
+├── config/                 # env · prisma(클라이언트) · openapi(Swagger) · zod
+├── constants/              # error-code(에러 코드 기준) · enums
+├── middlewares/            # error-handler · admin-auth · validate
+├── utils/                  # response(sendSuccess·AppError) · common-schema · ip-hash · date-range
+├── domains/                # health · feedback · event · stats
+│   └── <도메인>/           #   route · controller · service · repository · schema
 └── generated/prisma/       # Prisma 생성 코드 (git 제외)
 prisma/                     # schema.prisma · migrations
 tests/                      # 실제 DB에 붙인 테스트
+deploy/nas/                 # NAS 배포 (Nginx·인증서·백업) — deploy/nas/README.md
 docker-compose.yml          # 개발·테스트 DB
 ```
