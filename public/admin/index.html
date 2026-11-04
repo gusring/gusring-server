@@ -13,11 +13,13 @@
   <main id="login" class="login" hidden>
     <form id="login-form" class="card login-card">
       <h1>구스링 관리자</h1>
-      <p class="muted">NAS <code>.env</code>의 <code>ADMIN_TOKEN</code>을 넣어 주세요. 이 탭을 닫으면 지워집니다.</p>
-      <label for="token">관리자 토큰</label>
-      <input id="token" type="password" autocomplete="current-password" required>
+      <label for="username">아이디</label>
+      <input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label for="password">비밀번호</label>
+      <input id="password" type="password" autocomplete="current-password" required>
       <p id="login-error" class="error" role="alert"></p>
-      <button type="submit" class="primary">들어가기</button>
+      <button type="submit" class="primary" id="login-submit">로그인</button>
+      <p class="muted small">계정은 서버에서 만듭니다. 5번 틀리면 15분 동안 막힙니다.</p>
     </form>
   </main>
 
@@ -36,7 +38,8 @@
         </label>
         <button type="button" id="apply">조회</button>
         <button type="button" id="csv">CSV 받기</button>
-        <button type="button" id="logout" class="ghost">나가기</button>
+        <span id="who" class="muted"></span>
+        <button type="button" id="logout" class="ghost">로그아웃</button>
       </div>
     </header>
     <p id="status" class="status" role="status"></p>
@@ -95,6 +98,11 @@
           <span id="fb-page"></span>
           <button type="button" id="fb-next">다음</button>
         </div>
+      </section>
+
+      <section class="card wide">
+        <h2>관리 기록 <span class="legend">최근 20개</span></h2>
+        <div class="table-wrap"><table id="audit"></table></div>
       </section>
     </div>
   </div>

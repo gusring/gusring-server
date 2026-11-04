@@ -2,7 +2,7 @@
 // 이용자가 쓴 글(피드백·검색어)은 textContent로만 넣는다. innerHTML 금지.
 'use strict';
 
-const TOKEN_KEY = 'gusring_admin_token';
+// 로그인은 서버가 HttpOnly 쿠키로 유지한다. 이 화면은 비밀번호·세션 값을 저장하지 않는다.
 const PAGE = 20;
 const LANG_NAMES = { ko: '한국어', en: 'English', zh: '中文', ja: '日本語', vi: 'Tiếng Việt' };
 const STATUS_NAMES = { new: '새 글', read: '읽음', resolved: '처리함' };
@@ -11,7 +11,6 @@ const TYPE_NAMES = { general: '일반', translation: '번역', guide: '안내', 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n) => Number(n).toLocaleString('ko-KR');
 
-let token = null;
 let formNames = {};
 let fbOffset = 0;
 
@@ -30,30 +29,29 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-// ── 토큰 ──
-function readToken() {
-  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
-}
-function saveToken(t) {
-  try { sessionStorage.setItem(TOKEN_KEY, t); } catch { /* 저장 못 하면 이 화면에서만 */ }
-}
-function logout(message) {
-  token = null;
-  try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* 무시 */ }
+// ── 로그인 ──
+/** notice: 오류가 아닌 안내(로그아웃 등)는 회색으로 */
+function showLogin(message, notice = false) {
   $('#app').hidden = true;
   $('#login').hidden = false;
   $('#login-error').textContent = message || '';
-  $('#token').value = '';
-  $('#token').focus();
+  $('#login-error').className = notice ? 'muted' : 'error';
+  $('#password').value = '';
+  ($('#username').value ? $('#password') : $('#username')).focus();
 }
 
 class AuthError extends Error {}
 
-async function api(path, opts = {}) {
-  const headers = { Authorization: `Bearer ${token}` };
+/** path는 /api/v1 뒤 경로. 쿠키는 같은 출처라 브라우저가 붙인다 */
+function call(path, opts = {}) {
+  const headers = {};
   if (opts.body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`/api/v1/admin${path}`, { ...opts, headers });
-  if (res.status === 401) throw new AuthError('토큰이 맞지 않습니다.');
+  return fetch(`/api/v1${path}`, { ...opts, headers, credentials: 'same-origin' });
+}
+
+async function api(path, opts = {}) {
+  const res = await call(`/admin${path}`, opts);
+  if (res.status === 401) throw new AuthError('로그인이 끝났습니다. 다시 로그인해 주세요.');
   if (opts.raw) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res;
@@ -203,14 +201,14 @@ function feedbackItem(f) {
     }));
   select.addEventListener('change', () => run(async () => {
     await api(`/feedbacks/${f.id}`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) });
-    await loadFeedbacks();
+    await Promise.all([loadFeedbacks(), loadAudit()]);
   }, '상태를 바꿨습니다.'));
   const remove = el('button', { type: 'button', class: 'danger' }, '삭제');
   remove.addEventListener('click', () => {
     if (!confirm('이 피드백을 지울까요? 되돌릴 수 없습니다.')) return;
     run(async () => {
       await api(`/feedbacks/${f.id}`, { method: 'DELETE' });
-      await loadFeedbacks();
+      await Promise.all([loadFeedbacks(), loadAudit()]);
     }, '피드백을 삭제했습니다.');
   });
   const where = f.formNo !== null || f.formKey ? formLabel(f.formNo, f.formKey) : null;
@@ -253,12 +251,29 @@ async function run(fn, done) {
     await fn();
     status.textContent = done || `${$('#from').value} ~ ${$('#to').value} (한국 시간)`;
   } catch (e) {
-    if (e instanceof AuthError) logout(e.message);
+    if (e instanceof AuthError) showLogin(e.message);
     else status.textContent = `오류: ${e.message}`;
   }
 }
 
-const loadAll = () => run(() => Promise.all([loadStats(), loadFeedbacks()]));
+// ── 관리 기록 ──
+const ACTION_NAMES = {
+  login: '로그인', login_failed: '로그인 실패', logout: '로그아웃',
+  'feedback.status': '피드백 상태 변경', 'feedback.delete': '피드백 삭제',
+  'user.create': '계정 만듦', 'user.password': '비밀번호 바꿈', 'user.disable': '계정 막음', 'user.enable': '계정 풂', 'user.unlock': '잠금 풂',
+};
+const shortId = (s) => (s.length > 20 ? `${s.slice(0, 8)}…` : s);
+async function loadAudit() {
+  const { data } = await api(`/audit-logs?limit=${PAGE}`);
+  table('#audit', [['시각'], ['누가'], ['무엇'], ['대상']],
+    data.map((x) => {
+      let target = x.target ? shortId(x.target) : '';
+      if (x.action === 'feedback.status' && x.detail) target += ` → ${STATUS_NAMES[x.detail.status] || x.detail.status}`;
+      return [new Date(x.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }), x.actor, ACTION_NAMES[x.action] || x.action, target];
+    }));
+}
+
+const loadAll = () => run(() => Promise.all([loadStats(), loadFeedbacks(), loadAudit()]));
 
 async function downloadCsv() {
   await run(async () => {
@@ -272,7 +287,8 @@ async function downloadCsv() {
   }, 'CSV를 받았습니다.');
 }
 
-async function enter() {
+async function enter(username) {
+  $('#who').textContent = username;
   $('#login').hidden = true;
   $('#app').hidden = false;
   await loadAll();
@@ -296,17 +312,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#fb-prev').addEventListener('click', () => { fbOffset = Math.max(0, fbOffset - PAGE); run(loadFeedbacks); });
   $('#fb-next').addEventListener('click', () => { fbOffset += PAGE; run(loadFeedbacks); });
   $('#csv').addEventListener('click', downloadCsv);
-  $('#logout').addEventListener('click', () => logout(''));
+  $('#logout').addEventListener('click', async () => {
+    await call('/auth/logout', { method: 'POST' }).catch(() => null);
+    showLogin('로그아웃했습니다.', true);
+  });
 
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    token = $('#token').value.trim();
-    if (!token) return;
-    saveToken(token);
-    await enter();
+    const submit = $('#login-submit');
+    submit.disabled = true;
+    try {
+      const res = await call('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: $('#username').value, password: $('#password').value }),
+      });
+      const json = await res.json().catch(() => null);
+      $('#password').value = '';
+      if (json && json.success) await enter(json.data.username);
+      else showLogin(json ? json.message : `로그인 실패 (HTTP ${res.status})`);
+    } catch {
+      showLogin('서버에 연결할 수 없습니다.');
+    } finally {
+      submit.disabled = false;
+    }
   });
 
-  token = readToken();
-  if (token) await enter();
-  else logout('');
+  // 이미 로그인돼 있으면 바로 들어간다
+  const me = await call('/auth/me').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (me && me.success) await enter(me.data.username);
+  else showLogin('');
 });
