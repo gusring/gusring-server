@@ -46,3 +46,13 @@ jobs:
           docker run -d --name app -p 4000:4000 -e IP_HASH_SECRET=ci gusring-server:ci
           for i in $(seq 1 20); do curl -fsS localhost:4000/health && exit 0; sleep 1; done
           docker logs app; exit 1
+      - name: 브라우저용 정적 파일이 이미지에 들어 있는지 (빠지면 HTML이 대신 온다)
+        run: |
+          fail=0
+          for pair in api-docs/swagger-ui-bundle.js:javascript api-docs/swagger-ui.css:text/css \
+                      admin/:text/html admin/admin.js:javascript admin/admin.css:text/css admin/form-names.json:application/json; do
+            path=${pair%%:*}; want=${pair#*:}
+            type=$(curl -fsS -o /dev/null -w '%{content_type}' "localhost:4000/$path") || type="(요청 실패)"
+            case "$type" in *"$want"*) echo "OK   /$path $type" ;; *) echo "FAIL /$path $type (기대: $want)"; fail=1 ;; esac
+          done
+          exit $fail
