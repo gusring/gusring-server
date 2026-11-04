@@ -4,11 +4,20 @@ import { errorResponse } from '../utils/common-schema.js';
 // 각 도메인의 *.route.ts가 여기에 경로를 등록하고, /api-docs가 이걸로 문서를 만든다.
 export const registry = new OpenAPIRegistry();
 
-export const adminAuth = registry.registerComponent('securitySchemes', 'adminToken', {
+registry.registerComponent('securitySchemes', 'adminSession', {
+  type: 'apiKey',
+  in: 'cookie',
+  name: 'gusring_admin',
+  description: '관리자 로그인 쿠키 (POST /api/v1/auth/login). 바꾸는 요청(PATCH·DELETE)은 같은 출처(Origin)에서만',
+});
+registry.registerComponent('securitySchemes', 'adminToken', {
   type: 'http',
   scheme: 'bearer',
-  description: '관리자 토큰 (NAS .env의 ADMIN_TOKEN)',
+  description: '스크립트용 관리자 토큰 (NAS .env의 ADMIN_TOKEN, 선택)',
 });
+
+/** 관리자 경로: 로그인 쿠키 또는 토큰 */
+export const adminSecurity: Record<string, string[]>[] = [{ adminSession: [] }, { adminToken: [] }];
 
 /** 실패 응답 문서. codes는 그 경로에서 날 수 있는 에러 코드 */
 export function errors(list: Record<number, string>) {

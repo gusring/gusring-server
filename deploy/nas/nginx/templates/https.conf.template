@@ -6,6 +6,8 @@ server_tokens off;
 # 같은 IP의 요청 속도 제한 (도배 막기)
 limit_req_zone $binary_remote_addr zone=events:10m rate=60r/m;
 limit_req_zone $binary_remote_addr zone=feedback:10m rate=10r/m;
+# 관리자 비밀번호 대입 막기 (앱에서도 같은 계정 5번 실패 시 15분 잠금)
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
 limit_req_status 429;
 
 # Docker 내부 DNS. 서버 컨테이너가 다시 떠서 IP가 바뀌어도 따라간다
@@ -71,6 +73,10 @@ server {
     }
     location ~* ^/api/v1/feedbacks/?$ {
         limit_req zone=feedback burst=5 nodelay;
+        proxy_pass $app;
+    }
+    location ~* ^/api/v1/auth/login/?$ {
+        limit_req zone=login burst=5 nodelay;
         proxy_pass $app;
     }
     location / {

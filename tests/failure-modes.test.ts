@@ -15,11 +15,11 @@ afterEach(() => {
 });
 
 describe('설정 실수', () => {
-  it('ADMIN_TOKEN이 없으면 관리자 API는 503 (모든 토큰 거부)', async () => {
+  it('ADMIN_TOKEN이 없으면 토큰으로는 못 들어온다 (빈 토큰도 거부)', async () => {
     const { app } = await freshApp({ ADMIN_TOKEN: '' });
     const res = await request(app).get('/api/v1/admin/feedbacks').set('Authorization', 'Bearer ');
-    expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe('AUTH_ADMIN_DISABLED');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('AUTH_ADMIN_REQUIRED');
   });
 
   it('PORT가 숫자가 아니면 서버가 뜨지 않는다', async () => {
@@ -87,5 +87,24 @@ describe('요청 크기·CORS', () => {
       .set('Origin', 'https://evil.example.com')
       .set('Access-Control-Request-Method', 'GET');
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('운영 설정', () => {
+  it('NODE_ENV=production이면 로그인 쿠키에 Secure (HTTPS로만 보냄)', async () => {
+    const { app, disconnectPrisma } = await freshApp({ NODE_ENV: 'production' });
+    const { prisma } = await import('../src/config/prisma.js');
+    const { adminUserService } = await import('../src/domains/auth/admin-user.service.js');
+    await prisma().$executeRawUnsafe('TRUNCATE admin_session, admin_user, admin_audit_log RESTART IDENTITY');
+    await adminUserService.create('prodcheck', 'long enough password');
+    const server = app.listen(0);
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+    const res = await request(base).post('/api/v1/auth/login').set('Origin', base).send({ username: 'prodcheck', password: 'long enough password' });
+    await new Promise((r) => server.close(r));
+    await prisma().$executeRawUnsafe('TRUNCATE admin_session, admin_user, admin_audit_log RESTART IDENTITY');
+    await disconnectPrisma();
+    expect(res.status).toBe(200);
+    expect(res.headers['set-cookie']![0]).toMatch(/; Secure/);
   });
 });

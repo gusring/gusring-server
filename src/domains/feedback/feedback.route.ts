@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from '../../config/zod.js';
-import { adminAuth, errors, registry } from '../../config/openapi.js';
+import { adminSecurity, errors, registry } from '../../config/openapi.js';
 import { validateBody, validateParams, validateQuery } from '../../middlewares/validate.js';
 import { pageSchema, success } from '../../utils/common-schema.js';
 import { feedbackController as c } from './feedback.controller.js';
@@ -29,10 +29,10 @@ adminFeedbackRouter.get('/', validateQuery(listFeedbackQuery), c.list);
 adminFeedbackRouter.patch('/:feedbackId', validateParams(feedbackIdParams), validateBody(updateFeedbackBody), c.updateStatus);
 adminFeedbackRouter.delete('/:feedbackId', validateParams(feedbackIdParams), c.remove);
 
-const adminErrors = errors({ 401: 'AUTH_ADMIN_REQUIRED', 503: 'AUTH_ADMIN_DISABLED' });
+const adminErrors = errors({ 401: 'AUTH_ADMIN_REQUIRED', 403: 'AUTH_BAD_ORIGIN (쿠키로 PATCH·DELETE)' });
 
 registry.registerPath({
-  method: 'get', path: '/api/v1/admin/feedbacks', tags: ['Admin · Feedback'], security: [{ [adminAuth.name]: [] }],
+  method: 'get', path: '/api/v1/admin/feedbacks', tags: ['Admin · Feedback'], security: adminSecurity,
   summary: '피드백 목록 (최신순)',
   request: { query: listFeedbackQuery },
   responses: {
@@ -42,7 +42,7 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: 'patch', path: '/api/v1/admin/feedbacks/{feedbackId}', tags: ['Admin · Feedback'], security: [{ [adminAuth.name]: [] }],
+  method: 'patch', path: '/api/v1/admin/feedbacks/{feedbackId}', tags: ['Admin · Feedback'], security: adminSecurity,
   summary: '처리 상태 변경',
   request: { params: feedbackIdParams, body: { content: { 'application/json': { schema: updateFeedbackBody } } } },
   responses: {
@@ -52,7 +52,7 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: 'delete', path: '/api/v1/admin/feedbacks/{feedbackId}', tags: ['Admin · Feedback'], security: [{ [adminAuth.name]: [] }],
+  method: 'delete', path: '/api/v1/admin/feedbacks/{feedbackId}', tags: ['Admin · Feedback'], security: adminSecurity,
   summary: '피드백 삭제',
   description: '본문에 이용자가 개인정보를 적었을 때 지우는 용도',
   request: { params: feedbackIdParams },

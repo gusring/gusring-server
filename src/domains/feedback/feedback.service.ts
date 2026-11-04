@@ -1,5 +1,6 @@
 import { hashIp } from '../../utils/ip-hash.js';
 import { AppError } from '../../utils/response.js';
+import { auditRepository } from '../audit/audit.repository.js';
 import { feedbackRepository as repo, isRecordNotFound } from './feedback.repository.js';
 import type { CreateFeedbackBody, ListFeedbackQuery } from './feedback.schema.js';
 
@@ -29,18 +30,23 @@ export const feedbackService = {
 
   list: (q: ListFeedbackQuery) => repo.findPage(q),
 
-  async updateStatus(id: string, status: 'new' | 'read' | 'resolved') {
+  /** actor: 바꾼 관리자 (관리 기록에 남긴다) */
+  async updateStatus(id: string, status: 'new' | 'read' | 'resolved', actor: string) {
     try {
-      return await repo.updateStatus(id, status);
+      const item = await repo.updateStatus(id, status);
+      await auditRepository.log(actor, 'feedback.status', id, { status });
+      return item;
     } catch (e) {
       if (isRecordNotFound(e)) throw new AppError('FEEDBACK_NOT_FOUND');
       throw e;
     }
   },
 
-  async remove(id: string) {
+  /** 본문은 기록에 남기지 않는다 (개인정보가 있어서 지우는 경우가 많다) */
+  async remove(id: string, actor: string) {
     try {
-      await repo.delete(id);
+      const removed = await repo.delete(id);
+      await auditRepository.log(actor, 'feedback.delete', id, { lang: removed.lang, type: removed.type });
     } catch (e) {
       if (isRecordNotFound(e)) throw new AppError('FEEDBACK_NOT_FOUND');
       throw e;

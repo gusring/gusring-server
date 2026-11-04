@@ -124,15 +124,19 @@ describe('API 문서 (Swagger)', () => {
         'GET /api/v1/admin/stats/search',
         'GET /api/v1/admin/stats/fill',
         'GET /api/v1/admin/stats/export',
+        'GET /api/v1/admin/audit-logs',
+        'POST /api/v1/auth/login',
+        'POST /api/v1/auth/logout',
+        'GET /api/v1/auth/me',
       ].sort(),
     );
   });
 
-  it('관리자 경로에는 인증이 걸려 있고, 공개 경로에는 없다', async () => {
+  it('관리자 경로(+로그인 상태 확인)에는 인증이 걸려 있고, 공개 경로에는 없다', async () => {
     const { body } = await request(app).get('/api-docs.json');
     for (const [p, ops] of Object.entries(body.paths as Record<string, Record<string, { security?: unknown[] }>>)) {
       for (const op of Object.values(ops)) {
-        expect(Boolean(op.security?.length), p).toBe(p.startsWith('/api/v1/admin/'));
+        expect(Boolean(op.security?.length), p).toBe(p.startsWith('/api/v1/admin/') || p === '/api/v1/auth/me');
       }
     }
   });

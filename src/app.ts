@@ -8,6 +8,8 @@ import { healthRouter } from './domains/health/health.route.js';
 import { adminFeedbackRouter, feedbackRouter } from './domains/feedback/feedback.route.js';
 import { eventRouter } from './domains/event/event.route.js';
 import { adminStatsRouter } from './domains/stats/stats.route.js';
+import { authRouter } from './domains/auth/auth.route.js';
+import { adminAuditRouter } from './domains/audit/audit.route.js';
 import { requireAdmin } from './middlewares/admin-auth.js';
 import { errorHandler, notFound } from './middlewares/error-handler.js';
 import { adminPageCsp, noStore, securityHeaders } from './middlewares/security-headers.js';
@@ -37,9 +39,11 @@ export function createApp() {
   const v1 = express.Router();
   v1.use('/feedbacks', feedbackRouter);
   v1.use('/events', eventRouter);
+  v1.use('/auth', authRouter);
   v1.use('/admin', noStore, requireAdmin);
   v1.use('/admin/feedbacks', adminFeedbackRouter);
   v1.use('/admin/stats', adminStatsRouter);
+  v1.use('/admin/audit-logs', adminAuditRouter);
   app.use('/api/v1', v1);
 
   app.use(notFound);

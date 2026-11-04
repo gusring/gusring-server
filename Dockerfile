@@ -20,7 +20,7 @@ COPY public ./public
 # package.json은 "type": "module"(ESM) 때문에 꼭 같이 넣는다.
 # 브라우저로 내주는 정적 파일은 추적에 안 잡히므로 따로 넣는다: Swagger 화면(swagger-ui-dist), 관리자 화면(public)
 RUN npm run build \
- && npx nft print dist/server.js > /tmp/files.txt \
+ && { npx nft print dist/server.js; npx nft print dist/cli/admin-user.js; } | sort -u > /tmp/files.txt \
  && echo package.json >> /tmp/files.txt \
  && find node_modules/swagger-ui-dist public -type f ! -name '*.map' >> /tmp/files.txt \
  && mkdir /out && tar -cf - -T /tmp/files.txt | tar -xf - -C /out

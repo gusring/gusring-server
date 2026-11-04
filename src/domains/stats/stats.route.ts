@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from '../../config/zod.js';
-import { adminAuth, errors, registry } from '../../config/openapi.js';
+import { adminSecurity, errors, registry } from '../../config/openapi.js';
 import { validateQuery } from '../../middlewares/validate.js';
 import { success } from '../../utils/common-schema.js';
 import { statsController as c } from './stats.controller.js';
@@ -17,11 +17,11 @@ adminStatsRouter.get('/export', validateQuery(statsQuery), c.exportCsv);
 
 const common = {
   tags: ['Admin · Stats'],
-  security: [{ [adminAuth.name]: [] }],
+  security: adminSecurity,
   description: '기간은 한국 날짜 기준, to 포함. 기본 최근 30일, 최대 366일.',
 };
 const statsErrors = {
-  ...errors({ 400: 'COMMON_INVALID_INPUT · STATS_INVALID_RANGE', 401: 'AUTH_ADMIN_REQUIRED', 503: 'AUTH_ADMIN_DISABLED' }),
+  ...errors({ 400: 'COMMON_INVALID_INPUT · STATS_INVALID_RANGE', 401: 'AUTH_ADMIN_REQUIRED' }),
 };
 const json = (schema: z.ZodType) => ({ 'application/json': { schema: success(schema) } });
 
