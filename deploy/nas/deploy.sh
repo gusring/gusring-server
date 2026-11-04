@@ -71,7 +71,7 @@ docker save "gusring-server:$TAG" "gusring-migrate:$TAG" | gzip -1 \
 step "설정 파일 복사 (.env는 건드리지 않음)"
 "${SSH[@]}" "mkdir -p $DIR/nginx/templates $DIR/backup"
 "${SCP[@]}" deploy/nas/compose.yml deploy/nas/README.md deploy/nas/*.sh "$NAS:$DIR/"
-"${SCP[@]}" deploy/nas/nginx/select-conf.sh "$NAS:$DIR/nginx/"
+"${SCP[@]}" deploy/nas/nginx/*.sh "$NAS:$DIR/nginx/"
 "${SCP[@]}" deploy/nas/nginx/templates/*.template "$NAS:$DIR/nginx/templates/"
 "${SCP[@]}" deploy/nas/backup/backup-loop.sh "$NAS:$DIR/backup/"
 

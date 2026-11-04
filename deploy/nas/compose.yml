@@ -65,14 +65,19 @@ services:
     restart: unless-stopped
     environment:
       API_DOMAIN: ${API_DOMAIN:?API_DOMAIN 필요}
+      PUBLIC_IP: ${PUBLIC_IP:?PUBLIC_IP 필요}
+      PUBLIC_GW: ${PUBLIC_GW:-223.194.166.1}
+    # 기본 경로를 공인망으로 고정하는 데만 쓴다 (nginx/public-route.sh)
+    cap_add: [NET_ADMIN]
     volumes:
+      - ./nginx/public-route.sh:/gusring/public-route.sh:ro
       - ./nginx/select-conf.sh:/gusring/select-conf.sh:ro
       - ./nginx/templates:/etc/gusring-nginx:ro
       - certs:/etc/letsencrypt:ro
       - webroot:/var/www/certbot:ro
-    # 1) 인증서 유무에 따라 설정 고르기  2) 갱신된 인증서를 읽도록 6시간마다 다시 읽기  3) Nginx 실행
+    # 1) 기본 경로를 공인망으로  2) 인증서 유무에 따라 설정 고르기  3) 갱신된 인증서를 읽도록 6시간마다 다시 읽기  4) Nginx 실행
     # (명령을 sh로 바꾸면 이미지의 /docker-entrypoint.d 스크립트가 안 돈다 → 직접 실행)
-    command: ["/bin/sh", "-c", "sh /gusring/select-conf.sh && { while :; do sleep 6h & wait $${!}; nginx -s reload; done & } && exec nginx -g 'daemon off;'"]
+    command: ["/bin/sh", "-c", "sh /gusring/public-route.sh && sh /gusring/select-conf.sh && { while :; do sleep 6h & wait $${!}; nginx -s reload; done & } && exec nginx -g 'daemon off;'"]
     networks:
       internal: {}
       public:
