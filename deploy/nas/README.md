@@ -63,6 +63,10 @@ docker compose logs --tail 50 app nginx
 curl -s https://gusring.kro.kr/health
 ```
 
+- 관리자 통계 화면: https://gusring.kro.kr/admin (`.env`의 `ADMIN_TOKEN`으로 들어간다. 탭을 닫으면 토큰이 지워진다)
+- API 문서: https://gusring.kro.kr/api-docs
+- 서식이 늘거나 이름이 바뀌면 관리자 화면 이름표를 다시 만든다: `node scripts/gen-form-names.mjs ../gusring-web/src/features/forms/data/forms.ts`
+
 ## DB 백업·복원
 
 `backup` 컨테이너가 매일 4시(한국 시간) 이후 하루 한 번 `backups/gusring-YYYY-MM-DD.sql.gz`로 저장하고, 14일 지난 파일은 지운다.

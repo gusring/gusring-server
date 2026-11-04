@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
@@ -9,7 +10,10 @@ import { eventRouter } from './domains/event/event.route.js';
 import { adminStatsRouter } from './domains/stats/stats.route.js';
 import { requireAdmin } from './middlewares/admin-auth.js';
 import { errorHandler, notFound } from './middlewares/error-handler.js';
-import { noStore, securityHeaders } from './middlewares/security-headers.js';
+import { adminPageCsp, noStore, securityHeaders } from './middlewares/security-headers.js';
+
+// 관리자 화면 파일 (src·dist 둘 다 저장소 루트 바로 아래라 같은 경로)
+const ADMIN_PAGE_DIR = fileURLToPath(new URL('../public/admin', import.meta.url));
 
 // 앱 구성만 담당한다. 서버 실행(listen)은 server.ts에서.
 export function createApp() {
@@ -27,6 +31,8 @@ export function createApp() {
   const openApiDocument = buildOpenApiDocument();
   app.get('/api-docs.json', (_req, res) => res.json(openApiDocument));
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: '구스링 API' }));
+  // 관리자 화면 (데이터는 토큰을 넣은 뒤 /api/v1/admin/* 로 받는다)
+  app.use('/admin', adminPageCsp, express.static(ADMIN_PAGE_DIR, { index: 'index.html', redirect: true }));
 
   const v1 = express.Router();
   v1.use('/feedbacks', feedbackRouter);

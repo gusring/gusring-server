@@ -13,3 +13,13 @@ export const noStore: RequestHandler = (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 };
+
+/** 관리자 화면: 이 서버의 파일만 실행·연결 (피드백 본문에 스크립트가 섞여 와도 실행되지 않게) */
+export const adminPageCsp: RequestHandler = (_req, res, next) => {
+  res.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
+      "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  );
+  next();
+};

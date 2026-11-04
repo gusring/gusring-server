@@ -53,6 +53,37 @@ describe('보안 헤더', () => {
   });
 });
 
+describe('관리자 화면 /admin', () => {
+  it('/admin → /admin/ 로 보내고, 화면·스크립트·서식 이름표를 내준다', async () => {
+    expect((await request(app).get('/admin')).headers.location).toBe('/admin/');
+    const page = await request(app).get('/admin/');
+    expect(page.status).toBe(200);
+    expect(page.text).toContain('<script src="admin.js" defer></script>');
+    expect((await request(app).get('/admin/admin.js')).headers['content-type']).toContain('javascript');
+    const names = await request(app).get('/admin/form-names.json');
+    expect(Object.keys(names.body)).toHaveLength(41);
+  });
+
+  it('이 서버 파일만 실행하는 CSP (인라인 스크립트·외부 연결·iframe 금지)', async () => {
+    const csp = (await request(app).get('/admin/')).headers['content-security-policy'];
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain('unsafe-inline');
+  });
+
+  it('화면 코드는 이용자 글을 innerHTML로 넣지 않는다', async () => {
+    const js = (await request(app).get('/admin/admin.js')).text;
+    expect(js).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/);
+  });
+
+  it('없는 화면 파일은 공통 404', async () => {
+    const res = await request(app).get('/admin/nope.js');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('COMMON_NOT_FOUND');
+  });
+});
+
 describe('JSON 본문', () => {
   it('깨진 JSON은 500이 아니라 400 COMMON_BAD_REQUEST', async () => {
     const res = await request(app).post('/api/v1/feedbacks').set('Content-Type', 'application/json').send('{bad');

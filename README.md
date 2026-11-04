@@ -55,7 +55,7 @@ npm run dev            # http://localhost:4000
 |---|---|
 | 공개 | `POST /api/v1/feedbacks`, `POST /api/v1/events` |
 | 관리자 (`Authorization: Bearer <ADMIN_TOKEN>`) | `/api/v1/admin/feedbacks`, `/api/v1/admin/stats/{summary,forms,daily,search,fill,export}` |
-| 버전 없음 | `GET /health`, `/api-docs`, `/api-docs.json` |
+| 버전 없음 | `GET /health`, `/api-docs`, `/api-docs.json`, 관리자 화면 `/admin` |
 
 ## 개인정보
 
@@ -76,6 +76,7 @@ src/
 │   └── <도메인>/           #   route · controller · service · repository · schema
 └── generated/prisma/       # Prisma 생성 코드 (git 제외)
 prisma/                     # schema.prisma · migrations
+public/admin/               # 관리자 통계 화면 (HTML·CSS·JS, 서식 이름표는 scripts/gen-form-names.mjs로)
 tests/                      # 실제 DB에 붙인 테스트
 examples/gusring-api.ts     # 프론트에 복사해 쓰는 연결 모듈 (docs/frontend-integration.md)
 scripts/perf/               # 통계 성능 시험 (docs/performance.md)
