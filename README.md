@@ -10,7 +10,7 @@ Node.js 22 이상, Docker가 필요합니다.
 
 ```bash
 npm install            # Prisma 클라이언트도 같이 생성됨
-cp .env.example .env   # ADMIN_TOKEN, IP_HASH_SECRET 채우기
+cp .env.example .env   # IP_HASH_SECRET 채우기 (ADMIN_TOKEN은 스크립트용, 선택)
 npm run db:up          # 로컬 PostgreSQL (localhost:5433)
 npm run db:deploy      # 테이블 만들기
 npm run dev            # http://localhost:4000
@@ -26,6 +26,7 @@ npm run dev            # http://localhost:4000
 | `npm run db:up` | 로컬 DB 띄우기 |
 | `npm run db:migrate` | 스키마를 바꾼 뒤 마이그레이션 만들기 |
 | `npm run db:deploy` | 마이그레이션 적용 (배포 DB 포함) |
+| `npx tsx src/cli/admin-user.ts create <아이디>` | 로컬 관리자 계정 만들기 (NAS에서는 deploy/nas/README.md) |
 
 ## 환경변수
 
@@ -35,7 +36,7 @@ npm run dev            # http://localhost:4000
 | `CORS_ORIGIN` | | 허용할 프론트 주소 (쉼표로 구분) |
 | `TRUST_PROXY` | | 앞단 프록시 개수. 로컬 0, Vercel 1 |
 | `DATABASE_URL` | O | PostgreSQL 주소 |
-| `ADMIN_TOKEN` | O | 관리자 API 토큰. 없으면 관리자 API가 503 |
+| `ADMIN_TOKEN` | | 스크립트용 관리자 토큰 (선택). 사람은 아이디·비밀번호로 로그인 |
 | `IP_HASH_SECRET` | O | IP 해시에 섞는 비밀값 |
 
 `.env`는 git에 올라가지 않습니다. 새 변수를 추가하면 `.env.example`에도 적어 주세요.
@@ -54,7 +55,8 @@ npm run dev            # http://localhost:4000
 | 구분 | 경로 |
 |---|---|
 | 공개 | `POST /api/v1/feedbacks`, `POST /api/v1/events` |
-| 관리자 (`Authorization: Bearer <ADMIN_TOKEN>`) | `/api/v1/admin/feedbacks`, `/api/v1/admin/stats/{summary,forms,daily,search,fill,export}` |
+| 로그인 | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
+| 관리자 (로그인 쿠키 또는 `Authorization: Bearer <ADMIN_TOKEN>`) | `/api/v1/admin/feedbacks`, `/api/v1/admin/stats/{summary,forms,daily,search,fill,export}`, `/api/v1/admin/audit-logs` |
 | 버전 없음 | `GET /health`, `/api-docs`, `/api-docs.json`, 관리자 화면 `/admin` |
 
 ## 개인정보

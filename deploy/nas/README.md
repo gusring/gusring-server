@@ -63,9 +63,27 @@ docker compose logs --tail 50 app nginx
 curl -s https://gusring.kro.kr/health
 ```
 
-- 관리자 통계 화면: https://gusring.kro.kr/admin (`.env`의 `ADMIN_TOKEN`으로 들어간다. 탭을 닫으면 토큰이 지워진다)
+- 관리자 통계 화면: https://gusring.kro.kr/admin (관리자 아이디·비밀번호로 로그인)
 - API 문서: https://gusring.kro.kr/api-docs
 - 서식이 늘거나 이름이 바뀌면 관리자 화면 이름표를 다시 만든다: `node scripts/gen-form-names.mjs ../gusring-web/src/features/forms/data/forms.ts`
+
+## 관리자 계정
+
+가입 화면은 없다. NAS에서 명령으로 만든다. 비밀번호는 화면에 보이지 않게 두 번 묻는다 (10자 이상).
+명령줄에 비밀번호를 적지 않는다 (셸 기록에 남는다).
+
+```bash
+cd /share/Container/gusring
+docker compose exec app node dist/cli/admin-user.js create <아이디>    # 영문 소문자로 시작, 3~32자
+docker compose exec app node dist/cli/admin-user.js list
+docker compose exec app node dist/cli/admin-user.js passwd <아이디>    # 바꾸면 그 계정 로그인이 모두 끊김
+docker compose exec app node dist/cli/admin-user.js disable <아이디>   # 막기 (바로 로그아웃). 다시 쓰기: enable
+docker compose exec app node dist/cli/admin-user.js unlock <아이디>    # 5번 실패로 잠긴 것 바로 풀기
+```
+
+- 계정은 사람마다 따로 만든다. 누가 피드백을 바꾸거나 지웠는지 관리 기록에 남는다
+- 2시간 쓰지 않거나 로그인 12시간 뒤 다시 로그인
+- `ADMIN_TOKEN`은 스크립트용으로만 남겨 둔다 (비워 두면 토큰으로는 못 들어온다)
 
 ## DB 백업·복원
 

@@ -17,7 +17,7 @@
   "error": { "code": "COMMON_INVALID_INPUT", "details": [ { "path": "lang", "message": "..." } ] } }
 ```
 
-- 관리자 API는 `Authorization: Bearer <ADMIN_TOKEN>`
+- 관리자 API는 로그인 쿠키(관리자 화면 `/admin`) 또는 `Authorization: Bearer <ADMIN_TOKEN>`(스크립트용, 선택). 아래 "관리자 로그인" 참고
 - 서식에 적는 값(이름·주민등록번호 등)은 받지 않는다. 정의되지 않은 칸이 섞이면 거부한다
 - 통계 기간 `from`·`to`는 `YYYY-MM-DD` 한국 날짜, `to` 포함, 기본 최근 30일, 최대 366일
 
@@ -28,6 +28,10 @@
 | GET | `/health` | | 서버 상태 | 200 |
 | POST | `/api/v1/feedbacks` | | 피드백 저장 | 201 `{ id }` |
 | POST | `/api/v1/events` | | 이용 기록 묶음 저장 (최대 20개, text/plain도 받음) | 202 `{ accepted }` |
+| POST | `/api/v1/auth/login` | | 관리자 로그인 `{ username, password }` → 쿠키 | 200 `{ username }` |
+| POST | `/api/v1/auth/logout` | | 로그아웃 | 200 `null` |
+| GET | `/api/v1/auth/me` | 관리자 | 지금 로그인한 관리자 | 200 `{ username }` |
+| GET | `/api/v1/admin/audit-logs` | 관리자 | 관리 기록 (최신순, `actor` `action` `offset` `limit`) | 200 + `page` |
 | GET | `/api/v1/admin/feedbacks` | 관리자 | 피드백 목록 (최신순, `status` `lang` `formKey` `offset` `limit`) | 200 + `page` |
 | PATCH | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 처리 상태 변경 `{ status }` | 200 피드백 |
 | DELETE | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 삭제 (본문에 개인정보가 있을 때) | 200 `null` |
@@ -75,14 +79,27 @@
 | `COMMON_TOO_MANY_REQUESTS` | 429 | Nginx 속도 제한 (이벤트 분당 60·순간 40, 피드백 분당 10·순간 5) |
 | `COMMON_INTERNAL_ERROR` | 500 | 서버 오류. 내부 정보는 응답에 넣지 않고 서버 로그에만 |
 | `COMMON_NOT_READY` | 503 | Nginx: HTTPS 인증서 발급 전 |
-| `AUTH_ADMIN_REQUIRED` | 401 | 관리자 토큰이 없거나 틀림 |
-| `AUTH_ADMIN_DISABLED` | 503 | 서버에 `ADMIN_TOKEN`이 설정되지 않음 (모든 토큰 거부) |
+| `AUTH_ADMIN_REQUIRED` | 401 | 로그인하지 않았거나 세션이 끝남, 토큰이 틀림 |
+| `AUTH_INVALID_CREDENTIALS` | 401 | 아이디 또는 비밀번호가 틀림 (어느 쪽인지 알려 주지 않음) |
+| `AUTH_LOGIN_LOCKED` | 429 | 같은 계정 5번 연속 실패로 15분 잠김 |
+| `AUTH_BAD_ORIGIN` | 403 | 로그인·로그아웃, 또는 쿠키로 바꾸는 요청(PATCH·DELETE)이 다른 출처에서 옴 |
 | `FEEDBACK_RATE_LIMITED` | 429 | 같은 사람(IP 해시) 10분에 5건 초과 |
 | `FEEDBACK_NOT_FOUND` | 404 | 없는 피드백 id |
 | `STATS_INVALID_RANGE` | 400 | 기간 형식이 틀림·없는 날짜·from이 늦음·366일 초과 |
+
+## 관리자 로그인
+
+- 계정은 가입 화면 없이 NAS에서 만든다: `docker compose exec app node dist/cli/admin-user.js create <아이디>` (비밀번호는 화면에 안 보이게 두 번 입력, 10자 이상)
+- 비밀번호는 scrypt 해시로만 저장. 세션 쿠키 값도 DB에는 SHA-256 해시만
+- 쿠키 `gusring_admin`: HttpOnly, SameSite=Strict, Path=/api/v1, 운영은 Secure. 2시간 안 쓰거나 로그인 12시간 뒤 끝남
+- 같은 계정 5번 연속 실패 → 15분 잠금. Nginx에서 로그인 요청 IP당 분당 10번(순간 5)
+- 쿠키로 들어온 PATCH·DELETE와 로그인·로그아웃은 Origin이 서버와 같아야 한다 (다른 사이트가 몰래 보내는 요청 방지)
+- 계정 막기·비밀번호 바꾸기는 그 계정의 로그인을 바로 끊는다
+- 관리 기록(`admin_audit_log`): 로그인·실패·로그아웃·피드백 상태 변경·삭제·계정 관리. 피드백 본문은 남기지 않는다
 
 ## 바뀐 것
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-11-04 | 관리자 아이디·비밀번호 로그인(쿠키 세션), 관리 기록, `ADMIN_TOKEN`은 스크립트용 선택으로. `AUTH_ADMIN_DISABLED` 없앰 |
 | 2026-11-03 | 공통 응답 형식, `/api/v1` 아래로 이동, 에러 코드 `{도메인}_{내용}`, 목록 `page` → `offset`·`limit`, 삭제 204 → 200, CSV `export.csv` → `export`, Swagger 추가 |

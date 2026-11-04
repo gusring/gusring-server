@@ -81,5 +81,5 @@ zod 스키마 + `validateBody` / `validateQuery` / `validateParams` 미들웨어
 |---|---|---|---|
 | Swagger 작성 | 라우트 JSDoc 주석 | zod 스키마에서 생성 | 검증과 문서가 늘 같음 |
 | 브랜치 | `main → dev → <type>/#이슈` | `main ← <type>/<설명>` | 지금 백엔드 1인. 인원이 늘면 dev 도입 |
-| 인증 | JWT(access·refresh) | 관리자 토큰 1개 | 1단계는 이용자 로그인 없음. 3단계에서 교체 |
+| 인증 | JWT(access·refresh) | 관리자 아이디·비밀번호 + 서버 세션 쿠키 (스크립트용 토큰 선택) | 이용자 로그인이 없고 관리자 몇 명만 쓴다. 세션은 서버에서 바로 끊을 수 있어서(계정 막기·비밀번호 변경) JWT보다 맞다 |
 | 상태 확인·문서 URL | `/api/v1` 아래 | `/health`, `/api-docs` | 인프라(Docker·Nginx 헬스체크)용 |
