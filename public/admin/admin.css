@@ -125,3 +125,16 @@ td.name { white-space: normal; min-width: 140px; }
 .badge { background: var(--accent-soft); color: var(--text); border-radius: 999px; padding: 0 8px; }
 .badge.new { background: var(--accent); color: #1d1d1b; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 12px; }
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  padding: 20px;
+  width: min(380px, calc(100vw - 32px));
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.dialog-form { display: flex; flex-direction: column; gap: 8px; }
+.dialog-form input { width: 100%; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }

@@ -258,7 +258,7 @@ async function run(fn, done) {
 
 // ── 관리 기록 ──
 const ACTION_NAMES = {
-  login: '로그인', login_failed: '로그인 실패', logout: '로그아웃',
+  login: '로그인', login_failed: '로그인 실패', logout: '로그아웃', password_failed: '비밀번호 확인 실패',
   'feedback.status': '피드백 상태 변경', 'feedback.delete': '피드백 삭제',
   'user.create': '계정 만듦', 'user.password': '비밀번호 바꿈', 'user.disable': '계정 막음', 'user.enable': '계정 풂', 'user.unlock': '잠금 풂',
 };
@@ -312,6 +312,60 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#fb-prev').addEventListener('click', () => { fbOffset = Math.max(0, fbOffset - PAGE); run(loadFeedbacks); });
   $('#fb-next').addEventListener('click', () => { fbOffset += PAGE; run(loadFeedbacks); });
   $('#csv').addEventListener('click', downloadCsv);
+  // ── 비밀번호 바꾸기 ──
+  const dialog = $('#pw-dialog');
+  const resetPwForm = () => {
+    for (const id of ['#pw-current', '#pw-new', '#pw-confirm']) $(id).value = '';
+    $('#pw-error').textContent = '';
+  };
+  $('#pw-open').addEventListener('click', () => {
+    resetPwForm();
+    dialog.showModal();
+    $('#pw-current').focus();
+  });
+  // 닫을 때 입력한 비밀번호를 지운다. close 이벤트가 안 오는 브라우저가 있어 직접 지우고, Esc로 닫는 경우만 이벤트에 맡긴다
+  const closePw = () => {
+    dialog.close();
+    resetPwForm();
+  };
+  $('#pw-cancel').addEventListener('click', closePw);
+  dialog.addEventListener('close', resetPwForm);
+  $('#pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const current = $('#pw-current').value;
+    const next = $('#pw-new').value;
+    if (next !== $('#pw-confirm').value) {
+      $('#pw-error').textContent = '새 비밀번호 두 개가 다릅니다.';
+      return;
+    }
+    const submit = $('#pw-submit');
+    submit.disabled = true;
+    try {
+      const res = await call('/auth/password', { method: 'POST', body: JSON.stringify({ currentPassword: current, newPassword: next }) });
+      const json = await res.json().catch(() => null);
+      if (json && json.success) {
+        closePw();
+        $('#status').textContent = json.message;
+        loadAudit().catch(() => null);
+      } else if (res.status === 401) {
+        closePw();
+        showLogin('로그인이 끝났습니다. 다시 로그인해 주세요.');
+      } else {
+        $('#pw-error').textContent = json ? json.message : `바꾸지 못했습니다 (HTTP ${res.status})`;
+        if (json && json.error.code === 'AUTH_LOGIN_LOCKED') {
+          closePw();
+          showLogin(json.message);
+        } else {
+          loadAudit().catch(() => null);
+        }
+      }
+    } catch {
+      $('#pw-error').textContent = '서버에 연결할 수 없습니다.';
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
   $('#logout').addEventListener('click', async () => {
     await call('/auth/logout', { method: 'POST' }).catch(() => null);
     showLogin('로그아웃했습니다.', true);

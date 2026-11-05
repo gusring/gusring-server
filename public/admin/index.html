@@ -39,6 +39,7 @@
         <button type="button" id="apply">조회</button>
         <button type="button" id="csv">CSV 받기</button>
         <span id="who" class="muted"></span>
+        <button type="button" id="pw-open" class="ghost">비밀번호 바꾸기</button>
         <button type="button" id="logout" class="ghost">로그아웃</button>
       </div>
     </header>
@@ -106,5 +107,23 @@
       </section>
     </div>
   </div>
+  <!-- 비밀번호 바꾸기 -->
+  <dialog id="pw-dialog" aria-labelledby="pw-title">
+    <form id="pw-form" class="dialog-form">
+      <h2 id="pw-title">비밀번호 바꾸기</h2>
+      <label for="pw-current">지금 비밀번호</label>
+      <input id="pw-current" type="password" autocomplete="current-password" required>
+      <label for="pw-new">새 비밀번호 (10자 이상)</label>
+      <input id="pw-new" type="password" autocomplete="new-password" minlength="10" required>
+      <label for="pw-confirm">새 비밀번호 한 번 더</label>
+      <input id="pw-confirm" type="password" autocomplete="new-password" minlength="10" required>
+      <p id="pw-error" class="error" role="alert"></p>
+      <p class="muted small">바꾸면 다른 곳의 로그인은 모두 끊깁니다. 지금 비밀번호를 5번 틀리면 15분 동안 막힙니다.</p>
+      <div class="dialog-actions">
+        <button type="button" id="pw-cancel" class="ghost">취소</button>
+        <button type="submit" id="pw-submit" class="primary">바꾸기</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>
