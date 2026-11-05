@@ -18,6 +18,8 @@ export const ERROR_CODE = {
   AUTH_LOGIN_LOCKED: { status: 429, message: '로그인을 여러 번 실패해 잠시 막았습니다. 15분 뒤 다시 시도해 주세요.' },
   /** 로그인 쿠키로 바꾸는 요청이 다른 사이트에서 왔을 때 */
   AUTH_BAD_ORIGIN: { status: 403, message: '허용되지 않은 출처의 요청입니다.' },
+  /** 비밀번호 바꾸기에서 지금 비밀번호가 틀림 (401이 아님: 로그인은 유지된 상태) */
+  AUTH_WRONG_PASSWORD: { status: 400, message: '지금 비밀번호가 맞지 않습니다.' },
 
   FEEDBACK_RATE_LIMITED: { status: 429, message: '잠시 후 다시 보내 주세요.' },
   FEEDBACK_NOT_FOUND: { status: 404, message: '피드백이 없습니다.' },

@@ -16,6 +16,16 @@ export type LoginBody = z.infer<typeof loginBody>;
 
 export const meData = z.object({ username: z.string().openapi({ example: 'eunhyeon' }) }).openapi('AdminMe');
 
+export const changePasswordBody = z
+  .object({
+    currentPassword: z.string().min(1).max(PASSWORD_MAX).openapi({ format: 'password' }),
+    // 규칙(10자 이상 등)은 서비스에서 checkNewPassword로 본다 (계정 명령과 같은 문구)
+    newPassword: z.string().min(1).max(PASSWORD_MAX).openapi({ format: 'password', description: `${PASSWORD_MIN}자 이상, 앞뒤 공백 불가, 지금과 달라야 함` }),
+  })
+  .strict()
+  .openapi('ChangePasswordBody');
+export type ChangePasswordBody = z.infer<typeof changePasswordBody>;
+
 /** 새 비밀번호 규칙 (계정 만들기·바꾸기) */
 export function checkNewPassword(password: string): string | null {
   if (password.length < PASSWORD_MIN) return `비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`;

@@ -245,3 +245,78 @@ describe('계정 관리 명령 (admin-user)', () => {
     expect(raw[0]!.password_hash).not.toContain(PW);
   });
 });
+
+describe('비밀번호 바꾸기 (로그인한 관리자)', () => {
+  const NEW_PW = 'brand new password 2';
+  const change = (agent: request.Agent, currentPassword: string, newPassword: string, origin: string | null = base) => {
+    const req = agent.post('/api/v1/auth/password');
+    return (origin ? req.set('Origin', origin) : req).send({ currentPassword, newPassword });
+  };
+
+  it('바꾸면 지금 로그인은 남고 다른 곳의 로그인은 끊긴다. 새 비밀번호로만 들어간다', async () => {
+    await users.create('eunhyeon', PW);
+    const here = newAgent();
+    const elsewhere = newAgent();
+    await login(here, 'eunhyeon', PW);
+    await login(elsewhere, 'eunhyeon', PW);
+
+    const res = await change(here, PW, NEW_PW);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, message: '비밀번호를 바꿨습니다. 다른 곳의 로그인은 끊었습니다.', data: null });
+    expect((await here.get('/api/v1/auth/me')).status).toBe(200);
+    expect((await elsewhere.get('/api/v1/auth/me')).status).toBe(401);
+    expect((await login(newAgent(), 'eunhyeon', PW)).status).toBe(401);
+    expect((await login(newAgent(), 'eunhyeon', NEW_PW)).status).toBe(200);
+
+    const logs = await prisma().adminAuditLog.findMany({ where: { action: 'user.password' } });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ actor: 'eunhyeon', target: 'eunhyeon', detail: { by: 'self' } });
+    expect(JSON.stringify(await prisma().adminAuditLog.findMany({ select: { target: true, detail: true } }))).not.toContain(NEW_PW);
+  });
+
+  it('지금 비밀번호가 틀리면 400(로그인은 유지), 5번이면 잠기고 로그인도 막힌다', async () => {
+    await users.create('eunhyeon', PW);
+    const agent = newAgent();
+    await login(agent, 'eunhyeon', PW);
+    const wrong = await change(agent, 'not-my-password', NEW_PW);
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.code).toBe('AUTH_WRONG_PASSWORD');
+    expect((await agent.get('/api/v1/auth/me')).status).toBe(200);
+
+    const codes = [];
+    for (let i = 0; i < 4; i++) codes.push((await change(agent, `not-my-password-${i}`, NEW_PW)).body.error.code);
+    expect(codes).toEqual(['AUTH_WRONG_PASSWORD', 'AUTH_WRONG_PASSWORD', 'AUTH_WRONG_PASSWORD', 'AUTH_LOGIN_LOCKED']);
+    expect((await change(agent, PW, NEW_PW)).body.error.code).toBe('AUTH_LOGIN_LOCKED');
+    expect((await login(newAgent(), 'eunhyeon', PW)).body.error.code).toBe('AUTH_LOGIN_LOCKED');
+    expect(await prisma().adminAuditLog.count({ where: { action: 'password_failed' } })).toBe(5);
+  });
+
+  it.each([
+    ['10자 미만', 'short-pw', /10자 이상/],
+    ['앞뒤 공백', ` ${NEW_PW}`, /공백/],
+    ['지금과 같음', PW, /같습니다/],
+  ])('새 비밀번호 %s → 400 COMMON_INVALID_INPUT, 안 바뀜', async (_name, next, msg) => {
+    await users.create('eunhyeon', PW);
+    const agent = newAgent();
+    await login(agent, 'eunhyeon', PW);
+    const res = await change(agent, PW, next);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COMMON_INVALID_INPUT');
+    expect(res.body.message).toMatch(msg);
+    expect(res.body.error.details[0].path).toBe('newPassword');
+    expect((await login(newAgent(), 'eunhyeon', PW)).status).toBe(200);
+  });
+
+  it('다른 출처·Origin 없음은 403, 로그인 안 했으면 401, 토큰은 400', async () => {
+    await users.create('eunhyeon', PW);
+    const agent = newAgent();
+    await login(agent, 'eunhyeon', PW);
+    expect((await change(agent, PW, NEW_PW, 'https://evil.example.com')).body.error.code).toBe('AUTH_BAD_ORIGIN');
+    expect((await change(agent, PW, NEW_PW, null)).body.error.code).toBe('AUTH_BAD_ORIGIN');
+    expect((await change(newAgent(), PW, NEW_PW)).status).toBe(401);
+    const byToken = await request(base).post('/api/v1/auth/password').set(ADMIN).send({ currentPassword: PW, newPassword: NEW_PW });
+    expect(byToken.status).toBe(400);
+    expect(byToken.body.error.code).toBe('COMMON_BAD_REQUEST');
+    expect((await login(newAgent(), 'eunhyeon', PW)).status).toBe(200); // 하나도 안 바뀜
+  });
+});

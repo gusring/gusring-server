@@ -4,7 +4,8 @@ import { readCookie } from '../../utils/cookie.js';
 import { sendSuccess } from '../../utils/response.js';
 import { authService } from './auth.service.js';
 import { SESSION_COOKIE, SESSION_COOKIE_PATH, SESSION_MAX_MS } from './auth.policy.js';
-import type { LoginBody } from './auth.schema.js';
+import type { ChangePasswordBody, LoginBody } from './auth.schema.js';
+import { AppError } from '../../utils/response.js';
 
 const cookieOptions = (): CookieOptions => ({
   httpOnly: true, // 화면 스크립트가 읽을 수 없게
@@ -27,6 +28,15 @@ export const authController = {
     await authService.logout(token, admin?.username);
     res.clearCookie(SESSION_COOKIE, cookieOptions());
     sendSuccess(res, { message: '로그아웃했습니다.', data: null });
+  }) satisfies RequestHandler,
+
+  changePassword: (async (req, res) => {
+    const admin = res.locals.admin as { username: string; via: 'session' | 'token' };
+    // 스크립트용 토큰은 사람 계정이 아니다
+    if (admin.via !== 'session') throw new AppError('COMMON_BAD_REQUEST', '로그인한 관리자만 비밀번호를 바꿀 수 있습니다.');
+    const { currentPassword, newPassword } = res.locals.body as ChangePasswordBody;
+    await authService.changePassword(admin.username, readCookie(req, SESSION_COOKIE)!, currentPassword, newPassword);
+    sendSuccess(res, { message: '비밀번호를 바꿨습니다. 다른 곳의 로그인은 끊었습니다.', data: null });
   }) satisfies RequestHandler,
 
   me: ((_req, res) => {

@@ -27,6 +27,13 @@ export const authRepository = {
 
   createSession: (data: { id: string; userId: string; expiresAt: Date }) => prisma().adminSession.create({ data }),
 
+  /** 비밀번호를 바꾸고 keepSessionId를 뺀 그 계정의 세션을 모두 지운다 */
+  changePassword: (userId: string, passwordHash: string, keepSessionId: string) =>
+    prisma().$transaction([
+      prisma().adminUser.update({ where: { id: userId }, data: { passwordHash, failedCount: 0, lockedUntil: null } }),
+      prisma().adminSession.deleteMany({ where: { userId, id: { not: keepSessionId } } }),
+    ]),
+
   findSession: (id: string) =>
     prisma().adminSession.findUnique({ where: { id }, include: { user: { select: { username: true, disabled: true } } } }),
 

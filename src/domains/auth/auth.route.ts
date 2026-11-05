@@ -6,7 +6,7 @@ import { requireAdmin, requireSameOrigin } from '../../middlewares/admin-auth.js
 import { validateBody } from '../../middlewares/validate.js';
 import { success } from '../../utils/common-schema.js';
 import { authController as c } from './auth.controller.js';
-import { loginBody, meData } from './auth.schema.js';
+import { changePasswordBody, loginBody, meData } from './auth.schema.js';
 
 // ── /api/v1/auth ──
 export const authRouter = Router();
@@ -14,6 +14,8 @@ authRouter.use(noStore);
 authRouter.post('/login', requireSameOrigin, validateBody(loginBody), c.login);
 authRouter.post('/logout', requireSameOrigin, c.logout);
 authRouter.get('/me', requireAdmin, c.me);
+// requireAdmin이 쿠키 로그인의 POST는 Origin까지 확인한다
+authRouter.post('/password', requireAdmin, validateBody(changePasswordBody), c.changePassword);
 
 const tags = ['Auth'];
 
@@ -39,6 +41,22 @@ registry.registerPath({
   responses: {
     200: { description: '로그아웃됨', content: { 'application/json': { schema: success(z.null()) } } },
     ...errors({ 403: 'AUTH_BAD_ORIGIN' }),
+  },
+});
+
+registry.registerPath({
+  method: 'post', path: '/api/v1/auth/password', tags, security: [{ adminSession: [] }],
+  summary: '내 비밀번호 바꾸기 (로그인한 관리자)',
+  description:
+    '지금 비밀번호가 틀리면 로그인 실패와 같이 세어 5번이면 15분 잠금. 바꾸면 지금 로그인만 남고 다른 곳의 로그인은 끊긴다. ' +
+    '같은 출처(Origin)에서만. Nginx에서 로그인과 같은 속도 제한.',
+  request: { body: { content: { 'application/json': { schema: changePasswordBody } } } },
+  responses: {
+    200: { description: '바뀜', content: { 'application/json': { schema: success(z.null()) } } },
+    ...errors({
+      400: 'AUTH_WRONG_PASSWORD · COMMON_INVALID_INPUT(새 비밀번호 규칙) · COMMON_BAD_REQUEST(토큰)', 401: 'AUTH_ADMIN_REQUIRED',
+      403: 'AUTH_BAD_ORIGIN', 429: 'AUTH_LOGIN_LOCKED · COMMON_TOO_MANY_REQUESTS(Nginx)',
+    }),
   },
 });
 
