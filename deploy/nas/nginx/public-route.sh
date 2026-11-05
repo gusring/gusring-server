@@ -17,9 +17,18 @@ fi
 ip route replace default via "$PUBLIC_GW" dev "$dev"
 echo "[gusring] 기본 경로 → $PUBLIC_GW ($dev, $PUBLIC_IP)"
 
-# 알림은 몇 초 걸리므로 뒤에서 보내고 Nginx는 바로 띄운다. 실패해도 Nginx는 그대로 (시간이 지나면 라우터가 다시 배운다)
+# 컨테이너가 막 떴을 때는 공인망 연결이 아직 준비되지 않아 알림이 라우터에 닿지 않는다(11-05 운영: 시작 직후 게이트웨이 무응답).
+# 게이트웨이가 ARP에 답할 때까지(최대 60초) 기다린 뒤 알린다. 뒤에서 돌리고 Nginx는 바로 띄운다.
 (
+  tries=0
+  until arping -c 1 -w 2 -I "$dev" "$PUBLIC_GW" >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 30 ]; then
+      echo "[gusring] 게이트웨이 $PUBLIC_GW 가 60초 동안 응답하지 않음. 그래도 알림을 보낸다"
+      break
+    fi
+    sleep 2
+  done
   arping -U -c 3 -I "$dev" "$PUBLIC_IP" >/dev/null 2>&1 || echo "[gusring] MAC 알림(gratuitous ARP) 실패"
-  arping -c 2 -I "$dev" "$PUBLIC_GW" >/dev/null 2>&1 || echo "[gusring] 게이트웨이 ARP 응답 없음"
-  echo "[gusring] $PUBLIC_IP MAC 알림 보냄 ($(cat "/sys/class/net/$dev/address"))"
+  echo "[gusring] $PUBLIC_IP MAC 알림 보냄 ($(cat "/sys/class/net/$dev/address"), 게이트웨이 대기 ${tries}회)"
 ) &
