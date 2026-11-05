@@ -31,6 +31,7 @@
 | POST | `/api/v1/auth/login` | | 관리자 로그인 `{ username, password }` → 쿠키 | 200 `{ username }` |
 | POST | `/api/v1/auth/logout` | | 로그아웃 | 200 `null` |
 | GET | `/api/v1/auth/me` | 관리자 | 지금 로그인한 관리자 | 200 `{ username }` |
+| POST | `/api/v1/auth/password` | 관리자(로그인) | 내 비밀번호 바꾸기 `{ currentPassword, newPassword }` | 200 `null` |
 | GET | `/api/v1/admin/audit-logs` | 관리자 | 관리 기록 (최신순, `actor` `action` `offset` `limit`) | 200 + `page` |
 | GET | `/api/v1/admin/feedbacks` | 관리자 | 피드백 목록 (최신순, `status` `lang` `formKey` `offset` `limit`) | 200 + `page` |
 | PATCH | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 처리 상태 변경 `{ status }` | 200 피드백 |
@@ -82,6 +83,7 @@
 | `AUTH_ADMIN_REQUIRED` | 401 | 로그인하지 않았거나 세션이 끝남, 토큰이 틀림 |
 | `AUTH_INVALID_CREDENTIALS` | 401 | 아이디 또는 비밀번호가 틀림 (어느 쪽인지 알려 주지 않음) |
 | `AUTH_LOGIN_LOCKED` | 429 | 같은 계정 5번 연속 실패로 15분 잠김 |
+| `AUTH_WRONG_PASSWORD` | 400 | 비밀번호 바꾸기에서 지금 비밀번호가 틀림 (로그인 실패와 같이 세어 5번이면 잠금) |
 | `AUTH_BAD_ORIGIN` | 403 | 로그인·로그아웃, 또는 쿠키로 바꾸는 요청(PATCH·DELETE)이 다른 출처에서 옴 |
 | `FEEDBACK_RATE_LIMITED` | 429 | 같은 사람(IP 해시) 10분에 5건 초과 |
 | `FEEDBACK_NOT_FOUND` | 404 | 없는 피드백 id |
@@ -94,12 +96,14 @@
 - 쿠키 `gusring_admin`: HttpOnly, SameSite=Strict, Path=/api/v1, 운영은 Secure. 2시간 안 쓰거나 로그인 12시간 뒤 끝남
 - 같은 계정 5번 연속 실패 → 15분 잠금. Nginx에서 로그인 요청 IP당 분당 10번(순간 5)
 - 쿠키로 들어온 PATCH·DELETE와 로그인·로그아웃은 Origin이 서버와 같아야 한다 (다른 사이트가 몰래 보내는 요청 방지)
-- 계정 막기·비밀번호 바꾸기는 그 계정의 로그인을 바로 끊는다
+- 계정 막기·비밀번호 바꾸기는 그 계정의 로그인을 바로 끊는다. 관리자 화면에서 스스로 바꾸면 지금 로그인만 남긴다
+- 비밀번호 바꾸기(`/api/v1/auth/password`)는 지금 비밀번호를 확인한다. 틀리면 로그인 실패와 같이 세어 5번이면 15분 잠금
 - 관리 기록(`admin_audit_log`): 로그인·실패·로그아웃·피드백 상태 변경·삭제·계정 관리. 피드백 본문은 남기지 않는다
 
 ## 바뀐 것
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-11-05 | 관리자 화면에서 내 비밀번호 바꾸기 (`POST /api/v1/auth/password`, `AUTH_WRONG_PASSWORD`) |
 | 2026-11-04 | 관리자 아이디·비밀번호 로그인(쿠키 세션), 관리 기록, `ADMIN_TOKEN`은 스크립트용 선택으로. `AUTH_ADMIN_DISABLED` 없앰 |
 | 2026-11-03 | 공통 응답 형식, `/api/v1` 아래로 이동, 에러 코드 `{도메인}_{내용}`, 목록 `page` → `offset`·`limit`, 삭제 204 → 200, CSV `export.csv` → `export`, Swagger 추가 |
