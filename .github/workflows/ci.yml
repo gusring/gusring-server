@@ -1,0 +1,58 @@
+# 푸시·PR마다 타입 검사, 실제 PostgreSQL에서 테스트, Docker 이미지 빌드
+name: CI
+
+on:
+  # 팀원은 같은 저장소에 브랜치로 올리므로 모든 브랜치 푸시에서 돈다 (PR 전에도 확인)
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: gusring
+          POSTGRES_PASSWORD: gusring
+          POSTGRES_DB: gusring_test
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gusring -d gusring_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://gusring:gusring@localhost:5433/gusring_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 이미지 빌드 (runtime, migrate)
+        run: |
+          docker build --target runtime -t gusring-server:ci .
+          docker build --target migrate -t gusring-migrate:ci .
+      - name: 이미지가 DB 없이 뜨고 /health가 응답하는지
+        run: |
+          docker run -d --name app -p 4000:4000 -e IP_HASH_SECRET=ci gusring-server:ci
+          for i in $(seq 1 20); do curl -fsS localhost:4000/health && exit 0; sleep 1; done
+          docker logs app; exit 1
+      - name: 브라우저용 정적 파일이 이미지에 들어 있는지 (빠지면 HTML이 대신 온다)
+        run: |
+          fail=0
+          for pair in api-docs/swagger-ui-bundle.js:javascript api-docs/swagger-ui.css:text/css \
+                      admin/:text/html admin/admin.js:javascript admin/admin.css:text/css admin/form-names.json:application/json; do
+            path=${pair%%:*}; want=${pair#*:}
+            type=$(curl -fsS -o /dev/null -w '%{content_type}' "localhost:4000/$path") || type="(요청 실패)"
+            case "$type" in *"$want"*) echo "OK   /$path $type" ;; *) echo "FAIL /$path $type (기대: $want)"; fail=1 ;; esac
+          done
+          exit $fail

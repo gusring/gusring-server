@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>구스링 관리자</title>
+  <link rel="stylesheet" href="admin.css">
+  <script src="admin.js" defer></script>
+</head>
+<body>
+  <!-- 로그인 -->
+  <main id="login" class="login" hidden>
+    <form id="login-form" class="card login-card">
+      <h1>구스링 관리자</h1>
+      <label for="username">아이디</label>
+      <input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label for="password">비밀번호</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="error" role="alert"></p>
+      <button type="submit" class="primary" id="login-submit">로그인</button>
+      <p class="muted small">계정은 서버에서 만듭니다. 5번 틀리면 15분 동안 막힙니다.</p>
+    </form>
+  </main>
+
+  <!-- 통계 -->
+  <div id="app" hidden>
+    <header class="top">
+      <h1>구스링 관리자</h1>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="기간">
+          <button type="button" data-days="7">7일</button>
+          <button type="button" data-days="30">30일</button>
+          <button type="button" data-days="90">90일</button>
+        </div>
+        <label class="range">
+          <input id="from" type="date" aria-label="시작일"> ~ <input id="to" type="date" aria-label="끝일">
+        </label>
+        <button type="button" id="apply">조회</button>
+        <button type="button" id="csv">CSV 받기</button>
+        <span id="who" class="muted"></span>
+        <button type="button" id="pw-open" class="ghost">비밀번호 바꾸기</button>
+        <button type="button" id="logout" class="ghost">로그아웃</button>
+      </div>
+    </header>
+    <p id="status" class="status" role="status"></p>
+
+    <section class="cards" id="cards"></section>
+
+    <div class="grid">
+      <section class="card wide">
+        <h2>날짜별 <span class="legend"><i class="sw a"></i>방문자 <i class="sw b"></i>서식 조회</span></h2>
+        <div id="daily" class="chart"></div>
+      </section>
+
+      <section class="card">
+        <h2>언어별 방문자</h2>
+        <div id="langs"></div>
+      </section>
+
+      <section class="card">
+        <h2>검색어</h2>
+        <div class="two">
+          <div><h3>많이 찾은 것</h3><ol id="search-top" class="terms"></ol></div>
+          <div><h3>결과 없음</h3><ol id="search-zero" class="terms"></ol></div>
+        </div>
+        <p class="muted small">결과가 없던 검색어는 서식 이름·안내를 보강할 후보입니다.</p>
+      </section>
+
+      <section class="card wide">
+        <h2>서식별
+          <select id="forms-lang" aria-label="언어로 거르기">
+            <option value="">모든 언어</option>
+          </select>
+        </h2>
+        <div class="table-wrap"><table id="forms"></table></div>
+      </section>
+
+      <section class="card wide">
+        <h2>작성 도우미</h2>
+        <div class="two">
+          <div class="table-wrap"><table id="fill"></table></div>
+          <div><h3>안내를 많이 연 칸</h3><ol id="fields" class="terms"></ol></div>
+        </div>
+      </section>
+
+      <section class="card wide">
+        <h2>피드백
+          <select id="fb-status" aria-label="상태로 거르기">
+            <option value="">전체</option>
+            <option value="new">새 글</option>
+            <option value="read">읽음</option>
+            <option value="resolved">처리함</option>
+          </select>
+        </h2>
+        <ul id="feedbacks" class="feedbacks"></ul>
+        <div class="pager">
+          <button type="button" id="fb-prev">이전</button>
+          <span id="fb-page"></span>
+          <button type="button" id="fb-next">다음</button>
+        </div>
+      </section>
+
+      <section class="card wide">
+        <h2>관리 기록 <span class="legend">최근 20개</span></h2>
+        <div class="table-wrap"><table id="audit"></table></div>
+      </section>
+    </div>
+  </div>
+  <!-- 비밀번호 바꾸기 -->
+  <dialog id="pw-dialog" aria-labelledby="pw-title">
+    <form id="pw-form" class="dialog-form">
+      <h2 id="pw-title">비밀번호 바꾸기</h2>
+      <label for="pw-current">지금 비밀번호</label>
+      <input id="pw-current" type="password" autocomplete="current-password" required>
+      <label for="pw-new">새 비밀번호 (10자 이상)</label>
+      <input id="pw-new" type="password" autocomplete="new-password" minlength="10" required>
+      <label for="pw-confirm">새 비밀번호 한 번 더</label>
+      <input id="pw-confirm" type="password" autocomplete="new-password" minlength="10" required>
+      <p id="pw-error" class="error" role="alert"></p>
+      <p class="muted small">바꾸면 다른 곳의 로그인은 모두 끊깁니다. 지금 비밀번호를 5번 틀리면 15분 동안 막힙니다.</p>
+      <div class="dialog-actions">
+        <button type="button" id="pw-cancel" class="ghost">취소</button>
+        <button type="submit" id="pw-submit" class="primary">바꾸기</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
