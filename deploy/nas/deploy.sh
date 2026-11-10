@@ -50,8 +50,14 @@ echo "배포할 커밋: $TAG $(git log -1 --format=%s)"
 step "타입 검사·테스트 (docker compose의 테스트 DB 필요)"
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
   npm run -s typecheck
-  npm test 2>&1 | grep -E "Test Files|Tests |FAIL" || true
-  npm test >/dev/null 2>&1 || { echo "테스트 실패로 중단"; exit 1; }
+  # 한 번만 돌리고 그 결과로 판단한다 (예전에는 보여 주는 실행과 판단하는 실행이 따로라, 결과가 흔들리면 실패를 보고도 배포가 이어졌다)
+  log=$(mktemp)
+  if ! npm test >"$log" 2>&1; then
+    grep -E "Test Files|Tests |FAIL|timed out" "$log" || tail -20 "$log"
+    rm -f "$log"
+    echo "테스트 실패로 중단"; exit 1
+  fi
+  grep -E "Test Files|Tests " "$log"; rm -f "$log"
 else
   echo "(SKIP_TESTS=1, 건너뜀)"
 fi

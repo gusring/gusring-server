@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/config/prisma.js';
-import { adminUserService as users } from '../src/domains/auth/admin-user.service.js';
+import { USERS_LOCK, adminUserService as users } from '../src/domains/auth/admin-user.service.js';
 import { ADMIN, useCleanDb } from './helpers.js';
 
 // 관리자 화면의 계정 관리 (/api/v1/admin/users). Origin 검사 때문에 서버를 한 주소로 띄운다
@@ -153,8 +153,36 @@ describe('막기·역할·초기화·잠금', () => {
     const alice = await loginAs('alice', PW);
     const bob = await loginAs('bob', PW);
     const [a, b] = await Promise.all([send(alice, 'patch', '/bob', { role: 'staff' }), send(bob, 'patch', '/alice', { role: 'staff' })]);
-    expect([a.status, b.status].sort()).toEqual([200, 409]);
-    expect([a.body, b.body].find((x) => !x.success).error.code).toBe('USER_LAST_MANAGER');
+    // 진 쪽은 권한 확인 전에 이미 강등됐으면 403, 확인 뒤 잠금 안에서 걸리면 409. 어느 쪽이든 한 명은 남아야 한다
+    expect([a.status, b.status].filter((s) => s === 200)).toHaveLength(1);
+    expect(['AUTH_FORBIDDEN', 'USER_LAST_MANAGER']).toContain([a.body, b.body].find((x) => !x.success).error.code);
+    expect(await prisma().adminUser.count({ where: { role: 'manager' } })).toBe(1);
+  });
+
+  it('계정 변경은 DB 잠금을 잡고 한 번에 하나씩 한다 (다른 변경이 잡고 있으면 기다린다)', async () => {
+    await users.create('alice', PW, MGR);
+    await users.create('bob', PW, MGR);
+    let released = 0;
+    // 다른 계정 변경이 잠금을 0.8초 쥐고 있는 상황
+    const holder = prisma().$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${USERS_LOCK})`;
+      await new Promise((r) => setTimeout(r, 800));
+      released = Date.now();
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await users.setRole('bob', 'staff', 'alice');
+    const finished = Date.now();
+    await holder;
+    expect(released).toBeGreaterThan(0);
+    expect(finished).toBeGreaterThanOrEqual(released); // 잠금이 풀린 뒤에야 끝남
+  });
+
+  it('권한 확인을 건너뛰고 동시에 서로 강등해도 한 명은 남는다', async () => {
+    await users.create('alice', PW, MGR);
+    await users.create('bob', PW, MGR);
+    const results = await Promise.allSettled([users.setRole('bob', 'staff', 'alice'), users.setRole('alice', 'staff', 'bob')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ code: 'USER_LAST_MANAGER' });
     expect(await prisma().adminUser.count({ where: { role: 'manager' } })).toBe(1);
   });
 

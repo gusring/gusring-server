@@ -8,7 +8,7 @@ import { USERNAME_RE, checkNewPassword } from './auth.schema.js';
 // 계정을 바꾸는 일은 한 번에 하나씩(DB 잠금) 해서 "계정 관리자가 한 명은 남는다"는 규칙이 동시 요청에도 깨지지 않게 한다.
 
 type Tx = Prisma.TransactionClient;
-const USERS_LOCK = 4_710_001; // pg_advisory_xact_lock 키 (계정 변경 전용)
+export const USERS_LOCK = 4_710_001; // pg_advisory_xact_lock 키 (계정 변경 전용)
 
 function assertUsername(username: string) {
   if (!USERNAME_RE.test(username)) {
