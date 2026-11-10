@@ -44,6 +44,8 @@ erDiagram
         uuid        id            PK
         text        username      UK "영문 소문자로 시작 3~32자"
         text        password_hash    "scrypt$N$r$p$salt$hash (원래 비밀번호 저장 안 함)"
+        admin_role  role             "manager 계정 관리자 · staff 일반 관리자"
+        boolean     must_change_password "임시 비밀번호면 true"
         boolean     disabled         "막힌 계정"
         smallint    failed_count     "연속 실패 수"
         timestamptz locked_until     "NULL 가능. 5번 실패 시 15분"
@@ -61,7 +63,7 @@ erDiagram
     admin_audit_log {
         bigint      id            PK
         text        actor            "관리자 아이디 · token · cli"
-        text        action           "login · login_failed · logout · feedback.status · feedback.delete · user.*"
+        text        action           "login · login_failed · logout · password_failed · feedback.status · feedback.delete · user.*"
         text        target           "NULL 가능. 피드백 id·계정 아이디"
         jsonb       detail           "NULL 가능. 피드백 본문은 넣지 않음"
         timestamptz created_at
@@ -75,6 +77,7 @@ erDiagram
 | `lang` | `ko` `en` `zh` `ja` `vi` |
 | `feedback_type` | `general` 일반, `translation` 번역, `guide` 안내 내용, `bug` 오류 |
 | `feedback_status` | `new` 새 글, `read` 읽음, `resolved` 처리함 |
+| `admin_role` | `manager` 계정 관리자, `staff` 일반 관리자 |
 | `event_type` | gusring-web: `landing_view` `list_view` `form_view` `form_download` `language_select` `search` `category_filter` `feedback_click` `detail_time`<br>작성 도우미: `fill_start` `field_open` `fill_preview` `fill_png_save` `fill_print` `fill_reset` |
 
 같은 값이 `src/constants/enums.ts`에도 있다. 하나를 바꾸면 둘 다 바꾼다.

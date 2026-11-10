@@ -32,6 +32,11 @@
 | POST | `/api/v1/auth/logout` | | 로그아웃 | 200 `null` |
 | GET | `/api/v1/auth/me` | 관리자 | 지금 로그인한 관리자 | 200 `{ username }` |
 | POST | `/api/v1/auth/password` | 관리자(로그인) | 내 비밀번호 바꾸기 `{ currentPassword, newPassword }` | 200 `null` |
+| GET | `/api/v1/admin/users` | 계정 관리자 | 관리자 계정 목록 | 200 |
+| POST | `/api/v1/admin/users` | 계정 관리자 | 계정 만들기 `{ username, role, temporaryPassword }` | 201 `{ username }` |
+| PATCH | `/api/v1/admin/users/{username}` | 계정 관리자 | 역할 바꾸기·막기·풀기 `{ role?, disabled? }` | 200 `null` |
+| POST | `/api/v1/admin/users/{username}/password` | 계정 관리자 | 비밀번호 초기화 `{ temporaryPassword }` | 200 `null` |
+| POST | `/api/v1/admin/users/{username}/unlock` | 계정 관리자 | 5번 실패 잠금 풀기 | 200 `null` |
 | GET | `/api/v1/admin/audit-logs` | 관리자 | 관리 기록 (최신순, `actor` `action` `offset` `limit`) | 200 + `page` |
 | GET | `/api/v1/admin/feedbacks` | 관리자 | 피드백 목록 (최신순, `status` `lang` `formKey` `offset` `limit`) | 200 + `page` |
 | PATCH | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 처리 상태 변경 `{ status }` | 200 피드백 |
@@ -84,6 +89,12 @@
 | `AUTH_INVALID_CREDENTIALS` | 401 | 아이디 또는 비밀번호가 틀림 (어느 쪽인지 알려 주지 않음) |
 | `AUTH_LOGIN_LOCKED` | 429 | 같은 계정 5번 연속 실패로 15분 잠김 |
 | `AUTH_WRONG_PASSWORD` | 400 | 비밀번호 바꾸기에서 지금 비밀번호가 틀림 (로그인 실패와 같이 세어 5번이면 잠금) |
+| `AUTH_FORBIDDEN` | 403 | 계정 관리자만 할 수 있는 일 (일반 관리자·스크립트 토큰) |
+| `AUTH_PASSWORD_CHANGE_REQUIRED` | 403 | 임시 비밀번호로 들어옴. 비밀번호를 바꾸기 전에는 `/api/v1/admin/*` 불가 |
+| `USER_NOT_FOUND` | 404 | 없는 관리자 계정 |
+| `USER_ALREADY_EXISTS` | 409 | 이미 있는 아이디 |
+| `USER_LAST_MANAGER` | 409 | 계정 관리자가 한 명도 안 남게 되는 변경 |
+| `USER_SELF_CHANGE` | 409 | 자기 계정을 막거나 역할을 바꾸거나 초기화하려 함 |
 | `AUTH_BAD_ORIGIN` | 403 | 로그인·로그아웃, 또는 쿠키로 바꾸는 요청(PATCH·DELETE)이 다른 출처에서 옴 |
 | `FEEDBACK_RATE_LIMITED` | 429 | 같은 사람(IP 해시) 10분에 5건 초과 |
 | `FEEDBACK_NOT_FOUND` | 404 | 없는 피드백 id |
@@ -91,7 +102,11 @@
 
 ## 관리자 로그인
 
-- 계정은 가입 화면 없이 NAS에서 만든다: `docker compose exec app node dist/cli/admin-user.js create <아이디>` (비밀번호는 화면에 안 보이게 두 번 입력, 10자 이상)
+- 가입 화면은 없다. 역할은 계정 관리자(`manager`)와 일반 관리자(`staff`). 계정 관리자가 `/api/v1/admin/users`로 만들고 관리한다
+- 첫 계정은 NAS 명령으로 만든다(계정 관리자): `docker compose exec app node dist/cli/admin-user.js create <아이디>`
+- 계정 관리자가 만들거나 초기화한 계정은 임시 비밀번호(`mustChangePassword`). 바꾸기 전에는 `/api/v1/admin/*`가 `AUTH_PASSWORD_CHANGE_REQUIRED`
+- 계정 관리자가 한 명도 안 남게 되는 변경은 `USER_LAST_MANAGER`. 동시에 와도 DB 잠금으로 한 번에 하나씩 처리한다
+- 스크립트용 토큰은 일반 관리자와 같다 (계정 관리 불가)
 - 비밀번호는 scrypt 해시로만 저장. 세션 쿠키 값도 DB에는 SHA-256 해시만
 - 쿠키 `gusring_admin`: HttpOnly, SameSite=Strict, Path=/api/v1, 운영은 Secure. 2시간 안 쓰거나 로그인 12시간 뒤 끝남
 - 같은 계정 5번 연속 실패 → 15분 잠금. Nginx에서 로그인 요청 IP당 분당 10번(순간 5)
@@ -104,6 +119,7 @@
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-11-10 | 계정 관리자·일반 관리자 역할, 관리자 화면에서 계정 관리(`/api/v1/admin/users`), 임시 비밀번호. 주소를 `api.gusring.kro.kr`로 |
 | 2026-11-05 | 관리자 화면에서 내 비밀번호 바꾸기 (`POST /api/v1/auth/password`, `AUTH_WRONG_PASSWORD`) |
 | 2026-11-04 | 관리자 아이디·비밀번호 로그인(쿠키 세션), 관리 기록, `ADMIN_TOKEN`은 스크립트용 선택으로. `AUTH_ADMIN_DISABLED` 없앰 |
 | 2026-11-03 | 공통 응답 형식, `/api/v1` 아래로 이동, 에러 코드 `{도메인}_{내용}`, 목록 `page` → `offset`·`limit`, 삭제 204 → 200, CSV `export.csv` → `export`, Swagger 추가 |

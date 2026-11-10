@@ -69,20 +69,31 @@ curl -s https://api.gusring.kro.kr/health
 
 ## 관리자 계정
 
-가입 화면은 없다. NAS에서 명령으로 만든다. 비밀번호는 화면에 보이지 않게 두 번 묻는다 (10자 이상).
-명령줄에 비밀번호를 적지 않는다 (셸 기록에 남는다).
+평소에는 계정 관리자가 관리자 화면(https://api.gusring.kro.kr/admin)의 "계정 관리"에서 한다.
+
+| 역할 | 할 수 있는 것 |
+|---|---|
+| 계정 관리자 | 통계·피드백 + 계정 추가, 역할 바꾸기, 막기·풀기, 잠금 풀기, 비밀번호 초기화 |
+| 일반 관리자 | 통계·피드백, 내 비밀번호 바꾸기 |
+
+- 화면에서 만들거나 초기화한 계정은 임시 비밀번호다. 받은 사람은 처음 로그인 때 자기 비밀번호로 바꿔야 다른 기능이 열린다
+- 계정 관리자가 한 명도 안 남게 되는 변경(마지막 계정 관리자를 막거나 일반으로)은 거부한다. 자기 계정은 화면에서 막거나 역할을 바꿀 수 없다
+- 계정은 사람마다 따로 만든다. 누가 피드백·계정을 바꿨는지 관리 기록에 남는다
+
+NAS 명령은 비상용이다: 첫 계정 만들기, 계정 관리자가 모두 비밀번호를 잊었을 때.
+비밀번호는 화면에 보이지 않게 두 번 묻는다 (10자 이상). 명령줄에 비밀번호를 적지 않는다 (셸 기록에 남는다).
 
 ```bash
 cd /share/Container/gusring
-docker compose exec app node dist/cli/admin-user.js create <아이디>    # 영문 소문자로 시작, 3~32자
+docker compose exec app node dist/cli/admin-user.js create <아이디>    # 계정 관리자로 만든다. 영문 소문자로 시작, 3~32자
 docker compose exec app node dist/cli/admin-user.js list
 docker compose exec app node dist/cli/admin-user.js passwd <아이디>    # 바꾸면 그 계정 로그인이 모두 끊김
+docker compose exec app node dist/cli/admin-user.js role <아이디> manager|staff
 docker compose exec app node dist/cli/admin-user.js disable <아이디>   # 막기 (바로 로그아웃). 다시 쓰기: enable
 docker compose exec app node dist/cli/admin-user.js unlock <아이디>    # 5번 실패로 잠긴 것 바로 풀기
 ```
 
-- 계정은 사람마다 따로 만든다. 누가 피드백을 바꾸거나 지웠는지 관리 기록에 남는다
-- 비밀번호는 각자 관리자 화면 오른쪽 위 "비밀번호 바꾸기"에서 바꿀 수 있다 (지금 비밀번호 확인). 잊어버렸으면 위 `passwd`로
+- 비밀번호는 각자 관리자 화면 오른쪽 위 "비밀번호 바꾸기"에서 바꿀 수 있다 (지금 비밀번호 확인). 잊어버렸으면 계정 관리자에게 초기화를 부탁한다
 - 2시간 쓰지 않거나 로그인 12시간 뒤 다시 로그인
 - `ADMIN_TOKEN`은 스크립트용으로만 남겨 둔다 (비워 두면 토큰으로는 못 들어온다)
 
