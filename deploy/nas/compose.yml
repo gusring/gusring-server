@@ -65,6 +65,8 @@ services:
     restart: unless-stopped
     environment:
       API_DOMAIN: ${API_DOMAIN:?API_DOMAIN 필요}
+      # 도메인을 옮기는 동안 같이 받을 이름 (빈칸 구분, 선택)
+      EXTRA_DOMAINS: ${EXTRA_DOMAINS:-}
       PUBLIC_IP: ${PUBLIC_IP:?PUBLIC_IP 필요}
       PUBLIC_GW: ${PUBLIC_GW:-223.194.166.1}
     # 기본 경로를 공인망으로 고정하는 데만 쓴다 (nginx/public-route.sh)

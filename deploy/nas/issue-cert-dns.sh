@@ -1,6 +1,7 @@
 #!/bin/bash
 # HTTPS 인증서 발급·갱신 (ZeroSSL, DNS 인증). NAS의 /share/Container/gusring 에서:
-#   bash issue-cert-dns.sh          # 백그라운드로 시작
+#   bash issue-cert-dns.sh          # API_DOMAIN(.env) 인증서. 백그라운드로 시작
+#   bash issue-cert-dns.sh start <도메인>   # 다른 도메인 인증서 (도메인을 옮길 때)
 #   bash issue-cert-dns.sh status   # 넣을 TXT 값과 진행 상태 보기
 #
 # 왜 DNS 인증인가: 학교 네트워크가 해외에서 들어오는 접속을 막아(2026-11-03 확인),
@@ -11,6 +12,7 @@ set -eu
 cd "$(dirname "$0")"
 export PATH="$PATH:/share/CACHEDEV1_DATA/.qpkg/container-station/bin"
 DOMAIN=$(grep '^API_DOMAIN=' .env | cut -d= -f2-)
+[ "${1:-}" = "start" ] && [ -n "${2:-}" ] && DOMAIN=$2
 RUN=gusring-certbot-dns
 
 if [ "${1:-}" = "status" ]; then

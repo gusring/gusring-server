@@ -1,4 +1,4 @@
-# 인증서가 있을 때 쓰는 설정. ${API_DOMAIN}만 치환된다 (nginx/select-conf.sh)
+# 인증서가 있을 때 쓰는 공통 설정 (한 번만 들어간다). 도메인별 server 블록은 site.conf.template (nginx/select-conf.sh)
 
 # 응답 헤더에 Nginx 버전을 드러내지 않는다
 server_tokens off;
@@ -21,65 +21,4 @@ server {
 server {
     listen 443 ssl default_server;
     ssl_reject_handshake on;
-}
-
-server {
-    listen 80;
-    server_name ${API_DOMAIN};
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name ${API_DOMAIN};
-
-    ssl_certificate     /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_session_cache shared:gusring_ssl:10m;
-    ssl_session_timeout 1d;
-
-    add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    client_max_body_size 128k;
-
-    set $app http://app:4000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    # 클라이언트가 보낸 X-Forwarded-For는 버리고, Nginx가 본 접속 IP 하나만 넘긴다 (서버는 TRUST_PROXY=1)
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Forwarded-Proto https;
-    proxy_connect_timeout 5s;
-    proxy_read_timeout 30s;
-
-    error_page 429 = @too_many;
-    location @too_many {
-        # 앱과 같은 실패 형식 (src/constants/error-code.ts의 COMMON_TOO_MANY_REQUESTS)
-        default_type application/json;
-        return 429 '{"success":false,"message":"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.","error":{"code":"COMMON_TOO_MANY_REQUESTS"}}';
-    }
-
-    location ~* ^/api/v1/events/?$ {  # Express는 대소문자·끝 / 를 구분하지 않으므로 같게 맞춘다
-        limit_req zone=events burst=40 nodelay;
-        proxy_pass $app;
-    }
-    location ~* ^/api/v1/feedbacks/?$ {
-        limit_req zone=feedback burst=5 nodelay;
-        proxy_pass $app;
-    }
-    location ~* ^/api/v1/auth/(login|password)/?$ {
-        limit_req zone=login burst=5 nodelay;
-        proxy_pass $app;
-    }
-    location / {
-        proxy_pass $app;
-    }
 }
