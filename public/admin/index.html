@@ -101,6 +101,26 @@
         </div>
       </section>
 
+      <section class="card wide" id="users-card" hidden>
+        <h2>계정 관리 <span class="legend">계정 관리자에게만 보입니다</span></h2>
+        <div class="table-wrap"><table id="users"></table></div>
+        <form id="user-form" class="inline-form">
+          <h3>계정 추가</h3>
+          <label>아이디 <input id="nu-name" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="영문 소문자로 시작, 3~32자"></label>
+          <label>역할
+            <select id="nu-role">
+              <option value="staff">일반 관리자</option>
+              <option value="manager">계정 관리자</option>
+            </select>
+          </label>
+          <label>임시 비밀번호 <input id="nu-pw" required minlength="10" autocomplete="off" spellcheck="false" placeholder="10자 이상"></label>
+          <button type="button" id="nu-gen" class="ghost">임시 비밀번호 만들기</button>
+          <button type="submit" class="primary" id="nu-submit">만들기</button>
+        </form>
+        <p id="nu-msg" class="status" role="status"></p>
+        <p class="muted small">새 계정은 임시 비밀번호로 처음 로그인한 뒤 자기 비밀번호로 바꿔야 쓸 수 있습니다. 임시 비밀번호는 직접 전달해 주세요.</p>
+      </section>
+
       <section class="card wide">
         <h2>관리 기록 <span class="legend">최근 20개</span></h2>
         <div class="table-wrap"><table id="audit"></table></div>
@@ -111,6 +131,7 @@
   <dialog id="pw-dialog" aria-labelledby="pw-title">
     <form id="pw-form" class="dialog-form">
       <h2 id="pw-title">비밀번호 바꾸기</h2>
+      <p id="pw-forced" class="notice" hidden>임시 비밀번호로 들어왔습니다. 새 비밀번호로 바꿔야 관리자 화면을 쓸 수 있습니다.</p>
       <label for="pw-current">지금 비밀번호</label>
       <input id="pw-current" type="password" autocomplete="current-password" required>
       <label for="pw-new">새 비밀번호 (10자 이상)</label>
@@ -122,6 +143,22 @@
       <div class="dialog-actions">
         <button type="button" id="pw-cancel" class="ghost">취소</button>
         <button type="submit" id="pw-submit" class="primary">바꾸기</button>
+      </div>
+    </form>
+  </dialog>
+  <!-- 다른 사람 비밀번호 초기화 (계정 관리자) -->
+  <dialog id="reset-dialog" aria-labelledby="reset-title">
+    <form id="reset-form" class="dialog-form">
+      <h2 id="reset-title">비밀번호 초기화</h2>
+      <p id="reset-who"></p>
+      <label for="reset-pw">임시 비밀번호 (10자 이상)</label>
+      <input id="reset-pw" type="text" minlength="10" required autocomplete="off" spellcheck="false">
+      <button type="button" id="reset-gen" class="ghost">임시 비밀번호 만들기</button>
+      <p id="reset-error" class="error" role="alert"></p>
+      <p class="muted small">그 사람의 로그인은 바로 끊기고, 이 임시 비밀번호로 들어와 새 비밀번호로 바꿔야 합니다. 임시 비밀번호는 직접 전달해 주세요.</p>
+      <div class="dialog-actions">
+        <button type="button" id="reset-cancel" class="ghost">취소</button>
+        <button type="submit" id="reset-submit" class="primary">초기화</button>
       </div>
     </form>
   </dialog>
