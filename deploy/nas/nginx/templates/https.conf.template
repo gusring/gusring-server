@@ -1,0 +1,24 @@
+# 인증서가 있을 때 쓰는 공통 설정 (한 번만 들어간다). 도메인별 server 블록은 site.conf.template (nginx/select-conf.sh)
+
+# 응답 헤더에 Nginx 버전을 드러내지 않는다
+server_tokens off;
+
+# 같은 IP의 요청 속도 제한 (도배 막기)
+limit_req_zone $binary_remote_addr zone=events:10m rate=60r/m;
+limit_req_zone $binary_remote_addr zone=feedback:10m rate=10r/m;
+# 관리자 비밀번호 대입 막기 (앱에서도 같은 계정 5번 실패 시 15분 잠금)
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+limit_req_status 429;
+
+# Docker 내부 DNS. 서버 컨테이너가 다시 떠서 IP가 바뀌어도 따라간다
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+# 모르는 주소(naco.kro.kr, IP 직접 접속 등)는 응답 없이 끊는다
+server {
+    listen 80 default_server;
+    return 444;
+}
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
