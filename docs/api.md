@@ -1,6 +1,6 @@
 # API 명세
 
-- 운영: `https://gusring.kro.kr` / 로컬: `http://localhost:4000`
+- 운영: `https://api.gusring.kro.kr` / 로컬: `http://localhost:4000` (이용자 사이트는 `https://gusring.kro.kr`, Vercel)
 - 자세한 요청·응답 칸은 Swagger가 기준이다: `/api-docs` (화면), `/api-docs.json` (OpenAPI 3.1)
 - 이 문서와 Swagger의 경로·에러 코드가 같은지는 `tests/api-doc.test.ts`가 확인한다
 - 규칙은 [convention.md](convention.md), 테이블은 [erd.md](erd.md)

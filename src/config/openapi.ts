@@ -43,6 +43,6 @@ export function buildOpenApiDocument() {
         '- 서식에 적는 값(이름·주민등록번호 등)은 받지 않는다. 정의되지 않은 칸이 섞이면 거부',
       ].join('\n'),
     },
-    servers: [{ url: 'https://gusring.kro.kr', description: '운영 (NAS)' }, { url: 'http://localhost:4000', description: '로컬' }],
+    servers: [{ url: 'https://api.gusring.kro.kr', description: '운영 (NAS)' }, { url: 'http://localhost:4000', description: '로컬' }],
   });
 }

@@ -53,7 +53,7 @@ export type FeedbackResult =
 
 // ── 설정 ──
 
-let baseUrl = 'https://gusring.kro.kr';
+let baseUrl = 'https://api.gusring.kro.kr';
 let flushMs = 5000;
 
 /** 로컬 서버에 붙일 때: configureGusringApi({ baseUrl: 'http://localhost:4000' }) */

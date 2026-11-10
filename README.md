@@ -43,7 +43,7 @@ npm run dev            # http://localhost:4000
 
 ## API
 
-명세: [docs/api.md](docs/api.md) · 프론트 연결 [docs/frontend-integration.md](docs/frontend-integration.md) · 성능 [docs/performance.md](docs/performance.md) · Swagger `/api-docs` (운영 https://gusring.kro.kr/api-docs) · ERD [docs/erd.md](docs/erd.md) · 규칙 [docs/convention.md](docs/convention.md)
+명세: [docs/api.md](docs/api.md) · 프론트 연결 [docs/frontend-integration.md](docs/frontend-integration.md) · 성능 [docs/performance.md](docs/performance.md) · Swagger `/api-docs` (운영 https://api.gusring.kro.kr/api-docs) · ERD [docs/erd.md](docs/erd.md) · 규칙 [docs/convention.md](docs/convention.md)
 
 ```jsonc
 // 성공

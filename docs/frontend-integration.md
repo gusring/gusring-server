@@ -13,7 +13,7 @@ TypeScript 4.9(gusring-web과 같은 버전, target es5)에서도 타입 검사�
 // src/index.tsx
 import { configureGusringApi, startAutoFlush } from './shared/gusring-api';
 
-// 로컬 서버에 붙일 때만. 없으면 https://gusring.kro.kr
+// 로컬 서버에 붙일 때만. 없으면 https://api.gusring.kro.kr
 if (process.env.REACT_APP_GUSRING_API) configureGusringApi({ baseUrl: process.env.REACT_APP_GUSRING_API });
 startAutoFlush(); // 탭을 숨기거나 떠날 때 남은 기록을 보낸다
 ```

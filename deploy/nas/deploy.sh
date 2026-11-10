@@ -11,7 +11,7 @@ cd "$(git rev-parse --show-toplevel)"
 NAS="${NAS:-gkdmsgus@dongyang.mycloudnas.com}"
 KEY="${NAS_KEY:-$HOME/.ssh/timiroom_nas_ed25519}"
 DIR=/share/Container/gusring
-URL="${HEALTH_URL:-https://gusring.kro.kr/health}"
+URL="${HEALTH_URL:-https://api.gusring.kro.kr/health}"
 SSH=(ssh -F /dev/null -i "$KEY" -o BatchMode=yes -o IdentitiesOnly=yes "$NAS")
 SCP=(scp -F /dev/null -i "$KEY" -o BatchMode=yes -o IdentitiesOnly=yes -q)
 REMOTE_ENV="export PATH=\$PATH:/share/CACHEDEV1_DATA/.qpkg/container-station/bin; cd $DIR"

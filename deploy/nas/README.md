@@ -6,7 +6,7 @@
 |---|---|
 | 폴더 | `/share/Container/gusring` |
 | 공인 IP | `223.194.166.7` (QNAP 고정 IP 네트워크 `qnet-static-bond0-272384`에 Nginx만 붙음) |
-| 도메인 | `gusring.kro.kr` (내도메인.한국, A 레코드 → 공인 IP) |
+| 도메인 | `api.gusring.kro.kr` (내도메인.한국, A 레코드 → 공인 IP). `gusring.kro.kr`은 이용자 사이트(Vercel) |
 | 인증서 | ZeroSSL (kro.kr은 Let's Encrypt 발급 한도에 자주 걸림) |
 
 ```text
@@ -60,11 +60,11 @@ bash deploy/nas/deploy.sh rollback   # 바로 전 버전으로 (한 번 더 하�
 ```bash
 docker compose ps
 docker compose logs --tail 50 app nginx
-curl -s https://gusring.kro.kr/health
+curl -s https://api.gusring.kro.kr/health
 ```
 
-- 관리자 통계 화면: https://gusring.kro.kr/admin (관리자 아이디·비밀번호로 로그인)
-- API 문서: https://gusring.kro.kr/api-docs
+- 관리자 통계 화면: https://api.gusring.kro.kr/admin (관리자 아이디·비밀번호로 로그인)
+- API 문서: https://api.gusring.kro.kr/api-docs
 - 서식이 늘거나 이름이 바뀌면 관리자 화면 이름표를 다시 만든다: `node scripts/gen-form-names.mjs ../gusring-web/src/features/forms/data/forms.ts`
 
 ## 관리자 계정
@@ -125,7 +125,7 @@ bash issue-cert-dns.sh            # 백그라운드로 시작 (TXT 기록이 보
 bash issue-cert-dns.sh status     # 넣을 TXT 값 확인
 ```
 
-1. 내도메인.한국 → 도메인 관리 → `gusring.kro.kr` [수정] → TXT(SPF) 체크, 이름 `_acme-challenge`, 값 = status에 나온 값 → 보안코드 → 수정하기
+1. 내도메인.한국 → 도메인 관리 → `gusring.kro.kr` [수정] → TXT(SPF) 체크, 이름 `_acme-challenge.api`, 값 = status에 나온 값 → 보안코드 → 수정하기
 2. 네임서버 두 곳(`1.ns.dnsze.com`, `2.ns.dnsze.com`)에 보이면 자동으로 발급된다 (이번에는 저장 후 약 10분)
 3. `docker compose restart nginx`
 
