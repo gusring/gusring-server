@@ -10,7 +10,8 @@ import { eventRouter } from './domains/event/event.route.js';
 import { adminStatsRouter } from './domains/stats/stats.route.js';
 import { authRouter } from './domains/auth/auth.route.js';
 import { adminAuditRouter } from './domains/audit/audit.route.js';
-import { requireAdmin } from './middlewares/admin-auth.js';
+import { adminUsersRouter } from './domains/users/users.route.js';
+import { requireAdmin, requireFreshPassword } from './middlewares/admin-auth.js';
 import { errorHandler, notFound } from './middlewares/error-handler.js';
 import { adminPageCsp, noStore, securityHeaders } from './middlewares/security-headers.js';
 
@@ -40,10 +41,12 @@ export function createApp() {
   v1.use('/feedbacks', feedbackRouter);
   v1.use('/events', eventRouter);
   v1.use('/auth', authRouter);
-  v1.use('/admin', noStore, requireAdmin);
+  // 임시 비밀번호로 들어온 관리자는 비밀번호를 바꾸기 전까지 /admin/* 를 못 쓴다 (/auth/password는 열려 있음)
+  v1.use('/admin', noStore, requireAdmin, requireFreshPassword);
   v1.use('/admin/feedbacks', adminFeedbackRouter);
   v1.use('/admin/stats', adminStatsRouter);
   v1.use('/admin/audit-logs', adminAuditRouter);
+  v1.use('/admin/users', adminUsersRouter);
   app.use('/api/v1', v1);
 
   app.use(notFound);

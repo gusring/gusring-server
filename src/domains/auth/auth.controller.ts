@@ -2,7 +2,7 @@ import type { CookieOptions, RequestHandler } from 'express';
 import { env } from '../../config/env.js';
 import { readCookie } from '../../utils/cookie.js';
 import { sendSuccess } from '../../utils/response.js';
-import { authService } from './auth.service.js';
+import { authService, type AdminIdentity } from './auth.service.js';
 import { SESSION_COOKIE, SESSION_COOKIE_PATH, SESSION_MAX_MS } from './auth.policy.js';
 import type { ChangePasswordBody, LoginBody } from './auth.schema.js';
 import { AppError } from '../../utils/response.js';
@@ -40,7 +40,7 @@ export const authController = {
   }) satisfies RequestHandler,
 
   me: ((_req, res) => {
-    const admin = res.locals.admin as { username: string };
-    sendSuccess(res, { message: '로그인 상태입니다.', data: { username: admin.username } });
+    const { username, role, mustChangePassword } = res.locals.admin as AdminIdentity;
+    sendSuccess(res, { message: '로그인 상태입니다.', data: { username, role, mustChangePassword } });
   }) satisfies RequestHandler,
 };

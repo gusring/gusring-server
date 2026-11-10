@@ -14,7 +14,17 @@ export const loginBody = z
   .openapi('LoginBody');
 export type LoginBody = z.infer<typeof loginBody>;
 
-export const meData = z.object({ username: z.string().openapi({ example: 'eunhyeon' }) }).openapi('AdminMe');
+export const roleSchema = z.enum(['manager', 'staff']).openapi({ description: 'manager 계정 관리자 · staff 일반 관리자', example: 'staff' });
+
+export const meData = z
+  .object({
+    username: z.string().openapi({ example: 'eunhyeon' }),
+    role: roleSchema,
+    mustChangePassword: z.boolean().openapi({ description: 'true면 임시 비밀번호. 바꾸기 전에는 관리자 기능 403' }),
+  })
+  .openapi('AdminMe');
+// 로그인 응답은 아이디만
+export const loginData = z.object({ username: z.string().openapi({ example: 'eunhyeon' }) }).openapi('LoginResult');
 
 export const changePasswordBody = z
   .object({

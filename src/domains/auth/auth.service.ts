@@ -12,6 +12,9 @@ const sessionId = (token: string) => createHash('sha256').update(token).digest('
 export interface AdminIdentity {
   username: string;
   via: 'session' | 'token';
+  role: 'manager' | 'staff';
+  /** 임시 비밀번호로 들어옴 → 비밀번호 바꾸기 말고는 못 쓴다 */
+  mustChangePassword: boolean;
 }
 
 export const authService = {
@@ -50,7 +53,8 @@ export const authService = {
       return null;
     }
     if (session.lastSeenAt.getTime() <= now - SESSION_TOUCH_MS) await repo.touchSession(id);
-    return { username: session.user.username, via: 'session' };
+    const { username, role, mustChangePassword } = session.user;
+    return { username, via: 'session', role, mustChangePassword };
   },
 
   /**

@@ -30,12 +30,15 @@ export const authRepository = {
   /** 비밀번호를 바꾸고 keepSessionId를 뺀 그 계정의 세션을 모두 지운다 */
   changePassword: (userId: string, passwordHash: string, keepSessionId: string) =>
     prisma().$transaction([
-      prisma().adminUser.update({ where: { id: userId }, data: { passwordHash, failedCount: 0, lockedUntil: null } }),
+      prisma().adminUser.update({ where: { id: userId }, data: { passwordHash, mustChangePassword: false, failedCount: 0, lockedUntil: null } }),
       prisma().adminSession.deleteMany({ where: { userId, id: { not: keepSessionId } } }),
     ]),
 
   findSession: (id: string) =>
-    prisma().adminSession.findUnique({ where: { id }, include: { user: { select: { username: true, disabled: true } } } }),
+    prisma().adminSession.findUnique({
+      where: { id },
+      include: { user: { select: { username: true, disabled: true, role: true, mustChangePassword: true } } },
+    }),
 
   // 동시에 로그아웃돼 세션이 없어도 오류가 나지 않게 updateMany
   touchSession: (id: string) => prisma().adminSession.updateMany({ where: { id }, data: { lastSeenAt: new Date() } }),

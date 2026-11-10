@@ -95,7 +95,7 @@ describe('JSON 본문', () => {
 describe('에러 코드', () => {
   it('모두 {도메인}_{내용} 형식이고 HTTP 상태가 4xx·5xx다', () => {
     for (const [code, { status, message }] of Object.entries(ERROR_CODE)) {
-      expect(code).toMatch(/^(COMMON|AUTH|FEEDBACK|EVENT|STATS)_[A-Z_]+$/);
+      expect(code).toMatch(/^(COMMON|AUTH|USER|FEEDBACK|EVENT|STATS)_[A-Z_]+$/);
       expect(status).toBeGreaterThanOrEqual(400);
       expect(message.length).toBeGreaterThan(0);
     }
@@ -128,6 +128,11 @@ describe('API 문서 (Swagger)', () => {
         'POST /api/v1/auth/login',
         'POST /api/v1/auth/logout',
         'POST /api/v1/auth/password',
+        'GET /api/v1/admin/users',
+        'POST /api/v1/admin/users',
+        'PATCH /api/v1/admin/users/{username}',
+        'POST /api/v1/admin/users/{username}/password',
+        'POST /api/v1/admin/users/{username}/unlock',
         'GET /api/v1/auth/me',
       ].sort(),
     );

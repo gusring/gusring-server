@@ -96,7 +96,7 @@ describe('운영 설정', () => {
     const { prisma } = await import('../src/config/prisma.js');
     const { adminUserService } = await import('../src/domains/auth/admin-user.service.js');
     await prisma().$executeRawUnsafe('TRUNCATE admin_session, admin_user, admin_audit_log RESTART IDENTITY');
-    await adminUserService.create('prodcheck', 'long enough password');
+    await adminUserService.create('prodcheck', 'long enough password', { role: 'manager', actor: 'cli', mustChange: false });
     const server = app.listen(0);
     await new Promise((r) => server.once('listening', r));
     const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;

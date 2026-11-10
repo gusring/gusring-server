@@ -39,7 +39,8 @@ export const requireSameOrigin: RequestHandler = (req, _res, next) => {
 
 export const requireAdmin: RequestHandler = async (req, res, next) => {
   if (tokenMatches(req)) {
-    res.locals.admin = { username: 'token', via: 'token' } satisfies AdminIdentity;
+    // 스크립트용 토큰: 통계·피드백만 (계정 관리 불가)
+    res.locals.admin = { username: 'token', via: 'token', role: 'staff', mustChangePassword: false } satisfies AdminIdentity;
     return next();
   }
   const cookie = readCookie(req, SESSION_COOKIE);
@@ -51,3 +52,16 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
 };
 
 export const currentAdmin = (res: { locals: Record<string, unknown> }) => res.locals.admin as AdminIdentity;
+
+/** 임시 비밀번호로 들어온 관리자는 비밀번호를 바꾸기 전까지 관리자 기능을 못 쓴다 (requireAdmin 다음에) */
+export const requireFreshPassword: RequestHandler = (_req, res, next) => {
+  if (currentAdmin(res).mustChangePassword) throw new AppError('AUTH_PASSWORD_CHANGE_REQUIRED');
+  next();
+};
+
+/** 계정 관리자만 (requireAdmin 다음에). 토큰은 사람 계정이 아니라 안 된다 */
+export const requireManager: RequestHandler = (_req, res, next) => {
+  const admin = currentAdmin(res);
+  if (admin.via !== 'session' || admin.role !== 'manager') throw new AppError('AUTH_FORBIDDEN');
+  next();
+};

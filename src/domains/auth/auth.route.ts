@@ -6,7 +6,7 @@ import { requireAdmin, requireSameOrigin } from '../../middlewares/admin-auth.js
 import { validateBody } from '../../middlewares/validate.js';
 import { success } from '../../utils/common-schema.js';
 import { authController as c } from './auth.controller.js';
-import { changePasswordBody, loginBody, meData } from './auth.schema.js';
+import { changePasswordBody, loginBody, loginData, meData } from './auth.schema.js';
 
 // ── /api/v1/auth ──
 export const authRouter = Router();
@@ -27,7 +27,7 @@ registry.registerPath({
     '같은 계정 5번 연속 실패 시 15분 잠금. Nginx에서 IP당 분당 10번(순간 5) 제한. 다른 사이트에서 보낸 요청(Origin 불일치)은 거부.',
   request: { body: { content: { 'application/json': { schema: loginBody } } } },
   responses: {
-    200: { description: '로그인됨', content: { 'application/json': { schema: success(meData) } } },
+    200: { description: '로그인됨', content: { 'application/json': { schema: success(loginData) } } },
     ...errors({
       400: 'COMMON_INVALID_INPUT', 401: 'AUTH_INVALID_CREDENTIALS', 403: 'AUTH_BAD_ORIGIN',
       429: 'AUTH_LOGIN_LOCKED · COMMON_TOO_MANY_REQUESTS(Nginx)',

@@ -1,13 +1,17 @@
-// 관리자 계정 관리 (NAS에서):
+// 관리자 계정 관리 — 비상용 (평소에는 계정 관리자가 관리자 화면에서 한다). NAS에서:
 //   docker compose exec app node dist/cli/admin-user.js list
-//   docker compose exec app node dist/cli/admin-user.js create <아이디>    # 비밀번호를 두 번 묻는다 (화면에 안 보임)
+//   docker compose exec app node dist/cli/admin-user.js create <아이디>    # 계정 관리자로 만든다. 비밀번호를 두 번 묻는다 (화면에 안 보임)
 //   docker compose exec app node dist/cli/admin-user.js passwd <아이디>
+//   docker compose exec app node dist/cli/admin-user.js role <아이디> manager|staff
 //   docker compose exec app node dist/cli/admin-user.js disable|enable|unlock <아이디>
 // 비밀번호는 명령줄 인자로 받지 않는다 (셸 기록·프로세스 목록에 남기 때문).
+// 여기서 정한 비밀번호는 입력한 사람이 직접 쓰는 것이라 "처음 로그인 때 바꾸기"를 걸지 않는다.
 import { disconnectPrisma } from '../config/prisma.js';
 import { adminUserService as users } from '../domains/auth/admin-user.service.js';
 
-const USAGE = `사용: admin-user.js <list | create <아이디> | passwd <아이디> | disable <아이디> | enable <아이디> | unlock <아이디>>`;
+const USAGE = `사용: admin-user.js <list | create <아이디> | passwd <아이디> | role <아이디> manager|staff | disable <아이디> | enable <아이디> | unlock <아이디>>`;
+const ACTOR = 'cli';
+const ROLE_NAMES = { manager: '계정 관리자', staff: '일반 관리자' } as const;
 
 /** 터미널이면 화면에 보이지 않게 입력받는다. 파이프로 들어오면 첫 줄을 쓴다 */
 function readPassword(question: string): Promise<string> {
@@ -71,7 +75,7 @@ async function newPassword(): Promise<string> {
 }
 
 async function main(argv: string[]) {
-  const [cmd, username] = argv;
+  const [cmd, username, roleArg] = argv;
   switch (cmd) {
     case 'list': {
       const rows = await users.list();
@@ -79,12 +83,14 @@ async function main(argv: string[]) {
       for (const u of rows) {
         const state = u.disabled ? '막힘' : u.lockedUntil && u.lockedUntil > new Date() ? '잠김' : '사용';
         const last = u.lastLoginAt ? u.lastLoginAt.toISOString() : '로그인 기록 없음';
-        console.info(`${u.username}\t${state}\t로그인 중 ${u._count.sessions}\t마지막 ${last}`);
+        const temp = u.mustChangePassword ? '\t임시 비밀번호' : '';
+        console.info(`${u.username}\t${ROLE_NAMES[u.role]}\t${state}\t로그인 중 ${u.sessions}\t마지막 ${last}${temp}`);
       }
       return;
     }
     case 'create':
     case 'passwd':
+    case 'role':
     case 'disable':
     case 'enable':
     case 'unlock':
@@ -94,12 +100,18 @@ async function main(argv: string[]) {
       throw new Error(USAGE);
   }
   const name = username.trim().toLowerCase();
-  if (cmd === 'create') await users.create(name, await newPassword());
-  else if (cmd === 'passwd') await users.setPassword(name, await newPassword());
+  if (cmd === 'role') {
+    if (roleArg !== 'manager' && roleArg !== 'staff') throw new Error(USAGE);
+    await users.setRole(name, roleArg, ACTOR);
+    console.info(`${name}: ${ROLE_NAMES[roleArg]}로 바꿨습니다.`);
+    return;
+  }
+  if (cmd === 'create') await users.create(name, await newPassword(), { role: 'manager', actor: ACTOR, mustChange: false });
+  else if (cmd === 'passwd') await users.setPassword(name, await newPassword(), { actor: ACTOR, mustChange: false });
   else if (cmd === 'disable') await users.disable(name);
   else if (cmd === 'enable') await users.enable(name);
-  else await users.unlock(name);
-  const done = { create: '만들었습니다', passwd: '비밀번호를 바꾸고 로그인을 모두 끊었습니다', disable: '막고 로그인을 끊었습니다', enable: '다시 쓸 수 있게 했습니다', unlock: '잠금을 풀었습니다' };
+  else await users.unlock(name, ACTOR);
+  const done = { create: '계정 관리자로 만들었습니다', passwd: '비밀번호를 바꾸고 로그인을 모두 끊었습니다', disable: '막고 로그인을 끊었습니다', enable: '다시 쓸 수 있게 했습니다', unlock: '잠금을 풀었습니다' };
   console.info(`${name}: ${done[cmd]}.`);
 }
 

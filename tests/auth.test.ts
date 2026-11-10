@@ -20,6 +20,7 @@ afterAll(() => new Promise((r) => server.close(r)));
 useCleanDb();
 
 const PW = 'correct horse battery';
+const MGR = { role: 'manager' as const, actor: 'cli', mustChange: false };
 const login = (agent: request.Agent | ReturnType<typeof request>, username: string, password: string, origin: string | null = base) => {
   const req = (agent as request.Agent).post('/api/v1/auth/login');
   return (origin ? req.set('Origin', origin) : req).send({ username, password });
@@ -40,7 +41,7 @@ describe('비밀번호 해시', () => {
 
 describe('로그인', () => {
   it('성공하면 HttpOnly·SameSite=Strict 쿠키, DB에는 쿠키 값이 아닌 해시만', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     const res = await login(agent, 'Eunhyeon ', PW); // 대소문자·공백은 정리해서 받는다
     expect(res.status).toBe(200);
@@ -59,12 +60,12 @@ describe('로그인', () => {
     expect(sessions[0]!.id).not.toBe(value);
 
     const me = await agent.get('/api/v1/auth/me');
-    expect(me.body.data).toEqual({ username: 'eunhyeon' });
+    expect(me.body.data).toEqual({ username: 'eunhyeon', role: 'manager', mustChangePassword: false });
     expect((await agent.get('/api/v1/admin/stats/summary')).status).toBe(200);
   });
 
   it('없는 아이디와 틀린 비밀번호는 같은 응답', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const wrongPw = await login(newAgent(), 'eunhyeon', 'nope-nope-nope');
     const noUser = await login(newAgent(), 'nobody', PW);
     for (const res of [wrongPw, noUser]) {
@@ -76,7 +77,7 @@ describe('로그인', () => {
   });
 
   it('5번 틀리면 15분 잠금: 맞는 비밀번호도 429, 잠금이 풀리면 다시 되고 실패 수는 0으로', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const codes = [];
     for (let i = 0; i < 5; i++) codes.push((await login(newAgent(), 'eunhyeon', `wrong-${i}-password`)).body.error.code);
     expect(codes).toEqual([...Array(4).fill('AUTH_INVALID_CREDENTIALS'), 'AUTH_LOGIN_LOCKED']);
@@ -92,7 +93,7 @@ describe('로그인', () => {
   });
 
   it('동시에 10번 틀려도 실패를 빠짐없이 세고 잠근다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     await Promise.all(Array.from({ length: 10 }, (_, i) => login(newAgent(), 'eunhyeon', `wrong-${i}-password`)));
     const user = await prisma().adminUser.findUniqueOrThrow({ where: { username: 'eunhyeon' } });
     // 잠긴 뒤 도착한 요청은 비밀번호를 확인하지 않고 막으므로 5~10번. 확인한 실패는 모두 세야 한다
@@ -103,7 +104,7 @@ describe('로그인', () => {
   });
 
   it('다른 사이트에서 보낸 로그인·Origin 없는 로그인은 403', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     for (const origin of ['https://evil.example.com', null]) {
       const res = await login(newAgent(), 'eunhyeon', PW, origin);
       expect(res.status).toBe(403);
@@ -112,7 +113,8 @@ describe('로그인', () => {
   });
 
   it('막힌 계정은 로그인 불가, 막는 순간 기존 로그인도 끊김', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('backup', PW, MGR); // 계정 관리자가 한 명은 남아야 막을 수 있다
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     await users.disable('eunhyeon');
@@ -123,7 +125,7 @@ describe('로그인', () => {
   });
 
   it('DB에서 직접 막아 세션이 남아 있어도 그 세션은 거부한다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     await prisma().adminUser.update({ where: { username: 'eunhyeon' }, data: { disabled: true } });
@@ -135,7 +137,7 @@ describe('로그인', () => {
 
 describe('세션', () => {
   it('로그아웃하면 세션이 지워지고 쿠키도 지운다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     const out = await agent.post('/api/v1/auth/logout').set('Origin', base);
@@ -146,7 +148,7 @@ describe('세션', () => {
   });
 
   it('2시간 안 쓰거나 12시간이 지나면 다시 로그인', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const idle = newAgent();
     await login(idle, 'eunhyeon', PW);
     await prisma().adminSession.updateMany({ data: { lastSeenAt: new Date(Date.now() - 2 * 60 * 60 * 1000 - 1000) } });
@@ -166,7 +168,7 @@ describe('세션', () => {
   });
 
   it('쿠키로 바꾸는 요청(PATCH·DELETE)은 같은 출처에서만, 조회(GET)는 상관없음', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     const fb = await prisma().feedback.create({ data: { lang: 'ko', message: '본문' } });
@@ -180,13 +182,13 @@ describe('세션', () => {
   it('스크립트용 토큰은 그대로 쓸 수 있다 (Origin 검사 없음)', async () => {
     const fb = await prisma().feedback.create({ data: { lang: 'ko', message: '본문' } });
     expect((await request(base).patch(`/api/v1/admin/feedbacks/${fb.id}`).set(ADMIN).send({ status: 'read' })).status).toBe(200);
-    expect((await request(base).get('/api/v1/auth/me').set(ADMIN)).body.data).toEqual({ username: 'token' });
+    expect((await request(base).get('/api/v1/auth/me').set(ADMIN)).body.data).toEqual({ username: 'token', role: 'staff', mustChangePassword: false });
   });
 });
 
 describe('관리 기록', () => {
   it('로그인·실패·피드백 상태 변경·삭제를 누가 했는지 남기고, 피드백 본문은 남기지 않는다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', 'wrong-password-1');
     await login(agent, 'eunhyeon', PW);
@@ -216,31 +218,31 @@ describe('관리 기록', () => {
 
 describe('계정 관리 명령 (admin-user)', () => {
   it('아이디·비밀번호 규칙과 중복을 거른다', async () => {
-    await expect(users.create('A', PW)).rejects.toThrow(/아이디/);
-    await expect(users.create('1abc', PW)).rejects.toThrow(/아이디/);
-    await expect(users.create('eunhyeon', 'short')).rejects.toThrow(/10자 이상/);
-    await expect(users.create('eunhyeon', ` ${PW}`)).rejects.toThrow(/공백/);
-    await users.create('eunhyeon', PW);
-    await expect(users.create('eunhyeon', PW)).rejects.toThrow(/이미 있는/);
-    await expect(users.setPassword('nobody', PW)).rejects.toThrow(/없는 계정/);
+    await expect(users.create('A', PW, MGR)).rejects.toThrow(/아이디/);
+    await expect(users.create('1abc', PW, MGR)).rejects.toThrow(/아이디/);
+    await expect(users.create('eunhyeon', 'short', MGR)).rejects.toThrow(/10자 이상/);
+    await expect(users.create('eunhyeon', ` ${PW}`, MGR)).rejects.toThrow(/공백/);
+    await users.create('eunhyeon', PW, MGR);
+    await expect(users.create('eunhyeon', PW, MGR)).rejects.toThrow(/이미 있는/);
+    await expect(users.setPassword('nobody', PW, { actor: 'cli', mustChange: false })).rejects.toThrow(/없는 계정/);
   });
 
   it('비밀번호를 바꾸면 로그인이 모두 끊기고 잠금도 풀린다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     await prisma().adminUser.update({ where: { username: 'eunhyeon' }, data: { lockedUntil: new Date(Date.now() + 60_000), failedCount: 5 } });
-    await users.setPassword('eunhyeon', 'another long password');
+    await users.setPassword('eunhyeon', 'another long password', { actor: 'cli', mustChange: false });
     expect((await agent.get('/api/v1/auth/me')).status).toBe(401);
     expect((await login(newAgent(), 'eunhyeon', PW)).status).toBe(401);
     expect((await login(newAgent(), 'eunhyeon', 'another long password')).status).toBe(200);
   });
 
   it('목록에 상태와 로그인 수가 나오고, 원래 비밀번호·해시는 DB에서 사람이 읽을 수 없다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     await login(newAgent(), 'eunhyeon', PW);
     const [row] = await users.list();
-    expect(row).toMatchObject({ username: 'eunhyeon', disabled: false, _count: { sessions: 1 } });
+    expect(row).toMatchObject({ username: 'eunhyeon', role: 'manager', disabled: false, mustChangePassword: false, sessions: 1 });
     const raw = await prisma().$queryRawUnsafe<{ password_hash: string }[]>('SELECT password_hash FROM admin_user');
     expect(raw[0]!.password_hash).not.toContain(PW);
   });
@@ -254,7 +256,7 @@ describe('비밀번호 바꾸기 (로그인한 관리자)', () => {
   };
 
   it('바꾸면 지금 로그인은 남고 다른 곳의 로그인은 끊긴다. 새 비밀번호로만 들어간다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const here = newAgent();
     const elsewhere = newAgent();
     await login(here, 'eunhyeon', PW);
@@ -275,7 +277,7 @@ describe('비밀번호 바꾸기 (로그인한 관리자)', () => {
   });
 
   it('지금 비밀번호가 틀리면 400(로그인은 유지), 5번이면 잠기고 로그인도 막힌다', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     const wrong = await change(agent, 'not-my-password', NEW_PW);
@@ -296,7 +298,7 @@ describe('비밀번호 바꾸기 (로그인한 관리자)', () => {
     ['앞뒤 공백', ` ${NEW_PW}`, /공백/],
     ['지금과 같음', PW, /같습니다/],
   ])('새 비밀번호 %s → 400 COMMON_INVALID_INPUT, 안 바뀜', async (_name, next, msg) => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     const res = await change(agent, PW, next);
@@ -308,7 +310,7 @@ describe('비밀번호 바꾸기 (로그인한 관리자)', () => {
   });
 
   it('다른 출처·Origin 없음은 403, 로그인 안 했으면 401, 토큰은 400', async () => {
-    await users.create('eunhyeon', PW);
+    await users.create('eunhyeon', PW, MGR);
     const agent = newAgent();
     await login(agent, 'eunhyeon', PW);
     expect((await change(agent, PW, NEW_PW, 'https://evil.example.com')).body.error.code).toBe('AUTH_BAD_ORIGIN');

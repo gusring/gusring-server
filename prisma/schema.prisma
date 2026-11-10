@@ -97,12 +97,23 @@ model UsageEvent {
 
 // ── 관리자 (2026-11-04) ──
 
-/** 관리자 계정. 가입 화면 없이 NAS에서 명령으로 만든다 (src/cli/admin-user.ts) */
+/** manager: 계정 관리까지, staff: 통계·피드백만 */
+enum AdminRole {
+  manager
+  staff
+
+  @@map("admin_role")
+}
+
+/** 관리자 계정. 가입 화면은 없다. 계정 관리자가 화면에서 만들거나, 비상시 NAS 명령으로 만든다 (src/cli/admin-user.ts) */
 model AdminUser {
   id           String    @id @default(uuid()) @db.Uuid
   username     String    @unique
   /** scrypt$N$r$p$salt$hash (원래 비밀번호는 저장하지 않음) */
   passwordHash String    @map("password_hash")
+  role         AdminRole @default(staff)
+  /** 다른 사람이 정해 준 임시 비밀번호면 true. 바꾸기 전에는 비밀번호 바꾸기 말고는 못 쓴다 */
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   disabled     Boolean   @default(false)
   /** 연속 실패 수. 5번이면 15분 잠금, 로그인 성공 시 0 */
   failedCount  Int       @default(0) @map("failed_count") @db.SmallInt

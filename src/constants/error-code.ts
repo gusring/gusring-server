@@ -20,6 +20,17 @@ export const ERROR_CODE = {
   AUTH_BAD_ORIGIN: { status: 403, message: '허용되지 않은 출처의 요청입니다.' },
   /** 비밀번호 바꾸기에서 지금 비밀번호가 틀림 (401이 아님: 로그인은 유지된 상태) */
   AUTH_WRONG_PASSWORD: { status: 400, message: '지금 비밀번호가 맞지 않습니다.' },
+  /** 계정 관리자만 할 수 있는 일 */
+  AUTH_FORBIDDEN: { status: 403, message: '계정 관리자만 할 수 있습니다.' },
+  /** 임시 비밀번호로 들어온 경우: 비밀번호를 바꾸기 전에는 다른 기능을 쓸 수 없다 */
+  AUTH_PASSWORD_CHANGE_REQUIRED: { status: 403, message: '임시 비밀번호입니다. 먼저 비밀번호를 바꿔 주세요.' },
+
+  USER_NOT_FOUND: { status: 404, message: '없는 계정입니다.' },
+  USER_ALREADY_EXISTS: { status: 409, message: '이미 있는 아이디입니다.' },
+  /** 계정 관리자가 한 명도 안 남게 되는 변경 (마지막 계정 관리자를 막거나 일반으로 바꿈) */
+  USER_LAST_MANAGER: { status: 409, message: '계정 관리자가 한 명은 남아 있어야 합니다.' },
+  /** 자기 계정을 막거나 역할을 바꾸거나 화면에서 초기화하려 함 (내 비밀번호는 '비밀번호 바꾸기'로) */
+  USER_SELF_CHANGE: { status: 409, message: '자기 계정은 여기서 바꿀 수 없습니다.' },
 
   FEEDBACK_RATE_LIMITED: { status: 429, message: '잠시 후 다시 보내 주세요.' },
   FEEDBACK_NOT_FOUND: { status: 404, message: '피드백이 없습니다.' },
