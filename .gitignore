@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Prisma 생성 코드 (npm run build / postinstall 때 다시 만듦)
+src/generated/

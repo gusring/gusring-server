@@ -1,0 +1,137 @@
+# 구스링 운영 묶음 (NAS). 다른 프로젝트(TIMIROOM 등)와 네트워크·볼륨·DB를 공유하지 않는다.
+# 위치: /share/Container/gusring   실행: docker compose up -d
+# 값은 같은 폴더의 .env (권한 600)에서 읽는다 → .env.example 참고
+#
+# 네트워크
+#   internal : 서버·DB·Nginx만. 외부 포트는 없다 (밖에서 들어오는 길은 Nginx 하나)
+#              QNAP은 internal: true 네트워크를 만들지 못해(NAT 규칙 추가 실패) 일반 bridge로 둔다
+#   egress   : certbot이 인증서 발급 서버에 나가는 용도
+#   public   : QNAP 고정 IP 네트워크(qnet). 구스링 Nginx만 전용 공인 IP(PUBLIC_IP)로 붙는다
+
+name: gusring
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gusring
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 필요}
+      POSTGRES_DB: gusring
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gusring -d gusring"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  migrate:
+    image: gusring-migrate:${TAG:?TAG 필요}
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://gusring:${POSTGRES_PASSWORD}@db:5432/gusring
+    networks: [internal]
+    depends_on:
+      db: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  app:
+    image: gusring-server:${TAG}
+    restart: unless-stopped
+    environment:
+      PORT: "4000"
+      DATABASE_URL: postgresql://gusring:${POSTGRES_PASSWORD}@db:5432/gusring
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN 필요}
+      IP_HASH_SECRET: ${IP_HASH_SECRET:?IP_HASH_SECRET 필요}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://gusring-guide.vercel.app}
+      # Nginx 한 단계 뒤에 있으므로 1
+      TRUST_PROXY: "1"
+    networks: [internal]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  nginx:
+    image: nginx:1.30.0-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN 필요}
+      # 도메인을 옮기는 동안 같이 받을 이름 (빈칸 구분, 선택)
+      EXTRA_DOMAINS: ${EXTRA_DOMAINS:-}
+      PUBLIC_IP: ${PUBLIC_IP:?PUBLIC_IP 필요}
+      PUBLIC_GW: ${PUBLIC_GW:-223.194.166.1}
+    # 기본 경로를 공인망으로 고정하는 데만 쓴다 (nginx/public-route.sh)
+    cap_add: [NET_ADMIN]
+    volumes:
+      - ./nginx/public-route.sh:/gusring/public-route.sh:ro
+      - ./nginx/select-conf.sh:/gusring/select-conf.sh:ro
+      - ./nginx/templates:/etc/gusring-nginx:ro
+      - certs:/etc/letsencrypt:ro
+      - webroot:/var/www/certbot:ro
+    # 1) 기본 경로를 공인망으로  2) 인증서 유무에 따라 설정 고르기  3) 갱신된 인증서를 읽도록 6시간마다 다시 읽기  4) Nginx 실행
+    # (명령을 sh로 바꾸면 이미지의 /docker-entrypoint.d 스크립트가 안 돈다 → 직접 실행)
+    command: ["/bin/sh", "-c", "sh /gusring/public-route.sh && sh /gusring/select-conf.sh && { while :; do sleep 6h & wait $${!}; nginx -s reload; done & } && exec nginx -g 'daemon off;'"]
+    networks:
+      internal: {}
+      public:
+        ipv4_address: ${PUBLIC_IP:?PUBLIC_IP 필요}
+    depends_on: [app]
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+  certbot:
+    image: certbot/certbot:v5.6.0
+    restart: unless-stopped
+    volumes:
+      - certs:/etc/letsencrypt
+      - webroot:/var/www/certbot
+    # 처음 발급은 issue-cert.sh로. 이 컨테이너는 12시간마다 갱신만 확인한다
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"]
+    networks: [egress]
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+  backup:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: gusring
+      PGDATABASE: gusring
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: KST-9            # 한국 시간 (tzdata 없이 쓰는 POSIX 표기)
+      BACKUP_HOUR: "4"     # 매일 4시 이후 하루 한 번
+      KEEP_DAYS: "14"
+    volumes:
+      - ./backups:/backups
+      - ./backup/backup-loop.sh:/backup-loop.sh:ro
+    entrypoint: ["sh", "/backup-loop.sh"]
+    networks: [internal]
+    depends_on:
+      db: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+networks:
+  internal: {}
+  egress: {}
+  public:
+    external: true
+    name: ${QNET_NAME:-qnet-static-bond0-272384}
+
+volumes:
+  pgdata:
+  certs:
+  webroot:
