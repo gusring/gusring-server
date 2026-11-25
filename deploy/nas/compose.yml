@@ -50,7 +50,7 @@ services:
       DATABASE_URL: postgresql://gusring:${POSTGRES_PASSWORD}@db:5432/gusring
       ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN 필요}
       IP_HASH_SECRET: ${IP_HASH_SECRET:?IP_HASH_SECRET 필요}
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://gusring-guide.vercel.app}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://gusring-guide.vercel.app,https://gusring.kro.kr}
       # Nginx 한 단계 뒤에 있으므로 1
       TRUST_PROXY: "1"
     networks: [internal]

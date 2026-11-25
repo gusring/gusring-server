@@ -156,3 +156,53 @@ model AdminAuditLog {
   @@index([createdAt(sort: Desc)])
   @@map("admin_audit_log")
 }
+
+// ── 서식 정의 (2026-11-25) ──
+
+/** 서식 하나. 관리자가 고치는 것은 draft, 이용자에게 보이는 것은 publishedVersion이 가리키는 form_version */
+model Form {
+  id               String    @id @default(uuid()) @db.Uuid
+  /** 영어 kebab-case (예: birth-report). 지운 서식도 자리를 차지한다 */
+  key              String    @unique
+  formNo           Int       @unique @map("form_no") @db.SmallInt
+  /** 고치는 중인 서식 정의 전체 (src/domains/form/form.schema.ts formDefinition) */
+  draft            Json
+  /** 동시에 고칠 때 덮어쓰기 방지용 (PATCH baseUpdatedAt과 비교). 서버가 ms 단위로 넣는다 */
+  draftUpdatedAt   DateTime  @map("draft_updated_at") @db.Timestamptz(3)
+  draftUpdatedBy   String    @map("draft_updated_by")
+  /** NULL이면 이용자에게 안 보임 */
+  publishedVersion Int?      @map("published_version")
+  /** NULL이 아니면 지운 서식 (판은 남긴다) */
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  versions FormVersion[]
+
+  @@map("form")
+}
+
+/** 공개한 판. 고치지 않고 쌓기만 한다 */
+model FormVersion {
+  formId      String   @map("form_id") @db.Uuid
+  version     Int
+  definition  Json
+  publishedBy String   @map("published_by")
+  publishedAt DateTime @default(now()) @map("published_at") @db.Timestamptz(6)
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Restrict)
+
+  @@id([formId, version])
+  @@map("form_version")
+}
+
+/** 서식 원본 이미지(PNG). id = 내용의 SHA-256이라 같은 파일은 한 번만. DB에 두어 매일 백업(pg_dump)에 같이 들어간다 */
+model FormImage {
+  id        String   @id @db.Char(64)
+  width     Int
+  height    Int
+  bytes     Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("form_image")
+}

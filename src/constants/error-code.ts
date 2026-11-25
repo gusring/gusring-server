@@ -35,6 +35,18 @@ export const ERROR_CODE = {
   FEEDBACK_RATE_LIMITED: { status: 429, message: '잠시 후 다시 보내 주세요.' },
   FEEDBACK_NOT_FOUND: { status: 404, message: '피드백이 없습니다.' },
 
+  FORM_NOT_FOUND: { status: 404, message: '서식이 없습니다.' },
+  /** 지운 서식의 key도 다시 쓸 수 없다 */
+  FORM_KEY_TAKEN: { status: 409, message: '이미 쓰는 서식 key입니다.' },
+  FORM_NO_TAKEN: { status: 409, message: '이미 쓰는 서식 번호입니다.' },
+  /** 불러온 뒤 다른 관리자가 먼저 저장함 (baseUpdatedAt이 다름) */
+  FORM_CONFLICT: { status: 409, message: '다른 관리자가 먼저 저장했습니다. 다시 불러와 주세요.' },
+  /** 공개 전 검사 실패. details에 문제 목록 */
+  FORM_INVALID: { status: 422, message: '서식 정의에 고칠 곳이 있어 공개하지 못했습니다.' },
+  FORM_VERSION_NOT_FOUND: { status: 404, message: '그 판이 없습니다.' },
+  FORM_IMAGE_INVALID: { status: 400, message: 'PNG 이미지가 아닙니다.' },
+  FORM_IMAGE_NOT_FOUND: { status: 404, message: '서식 이미지가 없습니다.' },
+
   STATS_INVALID_RANGE: { status: 400, message: '조회 기간이 올바르지 않습니다.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 

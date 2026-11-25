@@ -45,7 +45,10 @@ export const errorResponse = z
     message: z.string().openapi({ example: '입력값이 올바르지 않습니다.' }),
     error: z.object({
       code: z.enum(ERROR_CODES).openapi({ example: 'COMMON_INVALID_INPUT' }),
-      details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+      details: z
+        .unknown()
+        .optional()
+        .openapi({ description: '입력 검증 실패: [{ path, message }] · FORM_INVALID: [{ fieldId?, message }] · FORM_CONFLICT: { draftUpdatedAt, draftUpdatedBy }' }),
     }),
   })
   .openapi('ErrorResponse');

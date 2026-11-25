@@ -57,6 +57,15 @@ server {
         limit_req zone=login burst=5 nodelay;
         proxy_pass $app;
     }
+    location ~* ^/api/v1/(forms|form-images)(/|$) {
+        limit_req zone=forms burst=60 nodelay;
+        proxy_pass $app;
+    }
+    # 서식 정의(앱에서 1MB)·쪽 이미지(앱에서 4MB) 저장. 크기 제한은 앱이 다시 확인한다
+    location ~* ^/api/v1/admin/(forms|form-images)(/|$) {
+        client_max_body_size 4m;
+        proxy_pass $app;
+    }
     location / {
         proxy_pass $app;
     }

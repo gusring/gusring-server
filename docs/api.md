@@ -30,6 +30,9 @@
 | POST | `/api/v1/events` | | 이용 기록 묶음 저장 (최대 20개, text/plain도 받음) | 202 `{ accepted }` |
 | POST | `/api/v1/auth/login` | | 관리자 로그인 `{ username, password }` → 쿠키 | 200 `{ username }` |
 | POST | `/api/v1/auth/logout` | | 로그아웃 | 200 `null` |
+| GET | `/api/v1/forms` | | 공개한 서식 목록 (번호순) | 200 `[{ key, formNo, category, title, desc, version }]` |
+| GET | `/api/v1/forms/{key}` | | 공개한 서식 정의 (저장한 그대로, 이미지는 `/api/v1/form-images/{pages[].imageId}`) | 200 `{ key, formNo, version, definition }` |
+| GET | `/api/v1/form-images/{id}` | | 서식 쪽 이미지 PNG (1년 캐시, CORS, 공통 형식으로 감싸지 않음) | 200 PNG |
 | GET | `/api/v1/auth/me` | 관리자 | 지금 로그인한 관리자 | 200 `{ username }` |
 | POST | `/api/v1/auth/password` | 관리자(로그인) | 내 비밀번호 바꾸기 `{ currentPassword, newPassword }` | 200 `null` |
 | GET | `/api/v1/admin/users` | 계정 관리자 | 관리자 계정 목록 | 200 |
@@ -38,6 +41,15 @@
 | POST | `/api/v1/admin/users/{username}/password` | 계정 관리자 | 비밀번호 초기화 `{ temporaryPassword }` | 200 `null` |
 | POST | `/api/v1/admin/users/{username}/unlock` | 계정 관리자 | 5번 실패 잠금 풀기 | 200 `null` |
 | GET | `/api/v1/admin/audit-logs` | 관리자 | 관리 기록 (최신순, `actor` `action` `offset` `limit`) | 200 + `page` |
+| GET | `/api/v1/admin/forms` | 관리자 | 서식 목록 (지운 것 제외) | 200 `[{ id, key, formNo, category, title, draftUpdatedAt, draftUpdatedBy, publishedVersion, publishedAt, hasUnpublishedChanges }]` |
+| POST | `/api/v1/admin/forms` | 관리자 | 서식 만들기 `{ key, formNo, definition? }` 또는 `{ key, formNo, copyFrom }` | 201 `AdminForm` |
+| GET | `/api/v1/admin/forms/{id}` | 관리자 | 초안과 정보 | 200 `AdminForm` = `{ id, key, formNo, draft, draftUpdatedAt, draftUpdatedBy, publishedVersion }` |
+| PATCH | `/api/v1/admin/forms/{id}` | 관리자 | 초안 저장 `{ definition?, key?, formNo?, baseUpdatedAt }` | 200 `AdminForm` |
+| DELETE | `/api/v1/admin/forms/{id}` | 계정 관리자 | 지우기 (이용자에게서 내림, 판은 남김) | 200 `null` |
+| POST | `/api/v1/admin/forms/{id}/publish` | 계정 관리자 | 전체 검사 후 새 판으로 공개 `{ baseUpdatedAt? }` | 200 `{ version }` |
+| GET | `/api/v1/admin/forms/{id}/versions` | 관리자 | 공개한 판 목록 (최신순) | 200 `[{ version, publishedBy, publishedAt }]` |
+| POST | `/api/v1/admin/forms/{id}/versions/{version}/restore` | 관리자 | 그 판을 초안으로 되돌리기 | 200 `AdminForm` |
+| POST | `/api/v1/admin/form-images` | 관리자 | 쪽 이미지 올리기 (본문 PNG 그대로, `Content-Type: image/png`, 4MB) | 201 `{ id, width, height }` |
 | GET | `/api/v1/admin/feedbacks` | 관리자 | 피드백 목록 (최신순, `status` `lang` `formKey` `offset` `limit`) | 200 + `page` |
 | PATCH | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 처리 상태 변경 `{ status }` | 200 피드백 |
 | DELETE | `/api/v1/admin/feedbacks/{feedbackId}` | 관리자 | 삭제 (본문에 개인정보가 있을 때) | 200 `null` |
@@ -81,8 +93,8 @@
 | `COMMON_INVALID_INPUT` | 400 | 입력 검증 실패. `details`에 칸과 이유 |
 | `COMMON_BAD_REQUEST` | 400 | 본문을 JSON으로 읽을 수 없음 |
 | `COMMON_NOT_FOUND` | 404 | 없는 경로 |
-| `COMMON_PAYLOAD_TOO_LARGE` | 413 | 본문이 100KB(이벤트 text/plain은 64KB)를 넘음 |
-| `COMMON_TOO_MANY_REQUESTS` | 429 | Nginx 속도 제한 (이벤트 분당 60·순간 40, 피드백 분당 10·순간 5) |
+| `COMMON_PAYLOAD_TOO_LARGE` | 413 | 본문이 100KB(이벤트 text/plain은 64KB, 서식 정의 1MB, 서식 이미지 4MB)를 넘음 |
+| `COMMON_TOO_MANY_REQUESTS` | 429 | Nginx 속도 제한 (이벤트 분당 60·순간 40, 피드백 분당 10·순간 5, 공개 서식·이미지 분당 120·순간 60) |
 | `COMMON_INTERNAL_ERROR` | 500 | 서버 오류. 내부 정보는 응답에 넣지 않고 서버 로그에만 |
 | `COMMON_NOT_READY` | 503 | Nginx: HTTPS 인증서 발급 전 |
 | `AUTH_ADMIN_REQUIRED` | 401 | 로그인하지 않았거나 세션이 끝남, 토큰이 틀림 |
@@ -98,6 +110,14 @@
 | `AUTH_BAD_ORIGIN` | 403 | 로그인·로그아웃, 또는 쿠키로 바꾸는 요청(PATCH·DELETE)이 다른 출처에서 옴 |
 | `FEEDBACK_RATE_LIMITED` | 429 | 같은 사람(IP 해시) 10분에 5건 초과 |
 | `FEEDBACK_NOT_FOUND` | 404 | 없는 피드백 id |
+| `FORM_NOT_FOUND` | 404 | 없는(지운) 서식·공개하지 않은 서식(공개 API) |
+| `FORM_VERSION_NOT_FOUND` | 404 | 되돌리려는 판이 없음 |
+| `FORM_KEY_TAKEN` | 409 | 이미 쓰는 서식 key (지운 서식 포함) |
+| `FORM_NO_TAKEN` | 409 | 이미 쓰는 서식 번호 (지운 서식 포함) |
+| `FORM_CONFLICT` | 409 | 초안을 불러온 뒤 다른 관리자가 먼저 저장함 (`baseUpdatedAt`이 `draftUpdatedAt`과 문자열로 다름). `details: { draftUpdatedAt, draftUpdatedBy }`. 다시 불러와야 한다 |
+| `FORM_INVALID` | 422 | 공개 전 검사 실패. `details`에 `{ fieldId?, message }` 목록 (gusring-web-v2 `validateDefinition` 결과 그대로 + 서버에 없는 이미지) |
+| `FORM_IMAGE_INVALID` | 400 | PNG가 아님·잘린 파일·`Content-Type`이 `image/png`가 아님 |
+| `FORM_IMAGE_NOT_FOUND` | 404 | 없는 서식 이미지 |
 | `STATS_INVALID_RANGE` | 400 | 기간 형식이 틀림·없는 날짜·from이 늦음·366일 초과 |
 
 ## 관리자 로그인
@@ -110,15 +130,28 @@
 - 비밀번호는 scrypt 해시로만 저장. 세션 쿠키 값도 DB에는 SHA-256 해시만
 - 쿠키 `gusring_admin`: HttpOnly, SameSite=Strict, Path=/api/v1, 운영은 Secure. 2시간 안 쓰거나 로그인 12시간 뒤 끝남
 - 같은 계정 5번 연속 실패 → 15분 잠금. Nginx에서 로그인 요청 IP당 분당 10번(순간 5)
-- 쿠키로 들어온 PATCH·DELETE와 로그인·로그아웃은 Origin이 서버와 같아야 한다 (다른 사이트가 몰래 보내는 요청 방지)
+- 쿠키로 들어온 POST·PATCH·DELETE와 로그인·로그아웃은 Origin이 서버와 같아야 한다 (다른 사이트가 몰래 보내는 요청 방지)
 - 계정 막기·비밀번호 바꾸기는 그 계정의 로그인을 바로 끊는다. 관리자 화면에서 스스로 바꾸면 지금 로그인만 남긴다
 - 비밀번호 바꾸기(`/api/v1/auth/password`)는 지금 비밀번호를 확인한다. 틀리면 로그인 실패와 같이 세어 5번이면 15분 잠금
-- 관리 기록(`admin_audit_log`): 로그인·실패·로그아웃·피드백 상태 변경·삭제·계정 관리. 피드백 본문은 남기지 않는다
+- 관리 기록(`admin_audit_log`): 로그인·실패·로그아웃·피드백 상태 변경·삭제·계정 관리·서식. 피드백 본문은 남기지 않는다
+
+## 서식 정의
+
+- 서식 정의(작성 도우미의 칸 좌표·5개 국어 안내)를 DB에 둔다. 관리자는 초안(`form.draft`)을 고치고, 계정 관리자가 공개하면 새 판(`form_version`)이 쌓인다. 이용자 API는 공개한 판만 내준다
+- 정의 모양은 gusring-web-v2 `src/forms/types.ts` 기준 (`src/domains/form/form.schema.ts`의 `formDefinition`): `{ title, desc, category, preset?, pages: [{ imageId, width, height, marginX? }], sections, fields }`. 모르는 칸이 섞이면 400
+- 초안 저장은 모양만 검사한다(번역·선택지가 비어도 저장). 공개할 때 `form-validate.ts`가 내용을 검사한다: 칸 id 중복·형식, 없는 섹션, 5개 국어, 쪽 순서, 좌표가 쪽 안인지, 쪽 크기 = 이미지 크기, 선택지 value, `extra.when`·`copyFrom`·`preset`이 가리키는 것. 이 파일은 gusring-web-v2 `src/forms/validate.ts`의 복사본이다 (같이 고친다). 서버는 여기에 "올리지 않은 이미지"를 더한다
+- 동시에 고치기: 불러올 때 받은 `draftUpdatedAt`(ISO 문자열)을 저장할 때 그대로 `baseUpdatedAt`으로 보낸다. 그새 다른 사람이 저장했으면 `FORM_CONFLICT`
+- 이용자 API도 정의를 저장한 그대로 내준다. 쪽 이미지는 `/api/v1/form-images/{pages[].imageId}`로 받는다. 이미지 id는 내용의 SHA-256이라 1년 캐시(`immutable`)해도 된다. 이미지도 DB(`form_image`)에 있어 매일 백업에 같이 들어간다
+- 이용자 사이트가 이미지를 캔버스로 PNG 저장하려면 그 주소가 NAS `.env`의 `CORS_ORIGIN`에 있어야 한다 (`https://gusring.kro.kr`)
+- 처음 옮기기: `npm run forms:import <폴더>` (NAS: `docker compose cp <폴더> app:/tmp/forms` 후 `docker compose exec app node dist/cli/forms-import.js /tmp/forms`). 폴더에 `forms.json`(`[{ key, formNo, definition }]`, `pages[].imageId`는 PNG 파일 이름 → 넣은 이미지 id로 바꿈)과 PNG (gusring-web-v2 `npm run export:forms`). 같은 key는 건너뛴다
+- 관리 화면은 `/admin/forms/` (gusring-web-v2에서 빌드해 `public/admin/forms/`에 넣는다. 화면 안 경로는 `index.html`로)
+- 관리 기록: `form.create` `form.update` `form.publish` `form.delete` `form.restore` `form_image.upload`
 
 ## 바뀐 것
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-11-25 | 서식 정의를 DB로: 공개 `/api/v1/forms`·`/api/v1/form-images`, 관리 `/api/v1/admin/forms`·`/api/v1/admin/form-images`, 초안 → 공개(계정 관리자만), 판 되돌리기, `FORM_*` 에러 코드, 서식 관리 화면 `/admin/forms/` |
 | 2026-11-10 | 계정 관리자·일반 관리자 역할, 관리자 화면에서 계정 관리(`/api/v1/admin/users`), 임시 비밀번호. 주소를 `api.gusring.kro.kr`로 |
 | 2026-11-05 | 관리자 화면에서 내 비밀번호 바꾸기 (`POST /api/v1/auth/password`, `AUTH_WRONG_PASSWORD`) |
 | 2026-11-04 | 관리자 아이디·비밀번호 로그인(쿠키 세션), 관리 기록, `ADMIN_TOKEN`은 스크립트용 선택으로. `AUTH_ADMIN_DISABLED` 없앰 |

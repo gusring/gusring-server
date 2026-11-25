@@ -65,6 +65,8 @@ curl -s https://api.gusring.kro.kr/health
 
 - 관리자 통계 화면: https://api.gusring.kro.kr/admin (관리자 아이디·비밀번호로 로그인)
 - API 문서: https://api.gusring.kro.kr/api-docs
+- 서식 정의 처음 옮기기 (한 번, 같은 key는 건너뛰므로 다시 돌려도 됨): `docker compose cp <내보낸 폴더> app:/tmp/forms` → `docker compose exec app node dist/cli/forms-import.js /tmp/forms`
+- 이용자 사이트가 서식 이미지를 캔버스로 저장하려면 `.env`의 `CORS_ORIGIN`에 `https://gusring.kro.kr`가 있어야 한다
 - 서식이 늘거나 이름이 바뀌면 관리자 화면 이름표를 다시 만든다: `node scripts/gen-form-names.mjs ../gusring-web/src/features/forms/data/forms.ts`
 
 ## 관리자 계정
