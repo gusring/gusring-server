@@ -7,7 +7,7 @@ import { success } from '../../utils/common-schema.js';
 import { formController as c } from './form.controller.js';
 import {
   adminFormItem, adminFormListItem, createFormBody, formIdParams, formImageItem, formKeyParams, formVersionItem,
-  imageIdParams, publicFormItem, publicFormListItem, publishBody, saveDraftBody, versionParams,
+  imageIdParams, publicFormItem, publicFormListItem, publishBody, publishResult, saveDraftBody, versionParams,
 } from './form.schema.js';
 
 /** 서식 정의는 100KB(전체 기본)를 넘을 수 있다. app.ts가 이 경로는 전체 JSON 읽기를 건너뛴다 */
@@ -33,7 +33,7 @@ registry.registerPath({
 registry.registerPath({
   method: 'get', path: '/api/v1/forms/{key}', tags: ['Forms'],
   summary: '공개한 서식 정의',
-  description: '`pages[].image`는 쪽 이미지 주소(`/api/v1/form-images/{id}`, 같은 서버 기준 절대 경로).',
+  description: '저장된 정의 그대로. 쪽 이미지는 `/api/v1/form-images/{pages[].imageId}`로 받는다.',
   request: { params: formKeyParams },
   responses: {
     200: ok('서식 정의', publicFormItem),
@@ -96,7 +96,7 @@ registry.registerPath({
 registry.registerPath({
   method: 'patch', path: '/api/v1/admin/forms/{id}', tags, security: adminSecurity,
   summary: '초안 저장',
-  description: '정의 전체를 바꾼다. 모양만 검사한다(번역이 비어도 저장됨, 내용 검사는 공개할 때). `baseUpdatedAt`이 지금 `draftUpdatedAt`과 다르면(그새 다른 사람이 저장) `FORM_CONFLICT`.',
+  description: '`definition`이 있으면 정의 전체를 바꾼다(없으면 key·formNo만). 모양만 검사한다(번역이 비어도 저장됨, 내용 검사는 공개할 때). `baseUpdatedAt`이 지금 `draftUpdatedAt`과 문자열로 다르면(그새 다른 사람이 저장) `FORM_CONFLICT`, `details: { draftUpdatedAt, draftUpdatedBy }`.',
   request: { params: formIdParams, ...body(saveDraftBody) },
   responses: {
     200: ok('저장한 서식', adminFormItem),
@@ -113,10 +113,10 @@ registry.registerPath({
 registry.registerPath({
   method: 'post', path: '/api/v1/admin/forms/{id}/publish', tags, security: [{ adminSession: [] }],
   summary: '초안 공개 (계정 관리자만)',
-  description: '번역·좌표·이미지 크기 등 전체 검사 후 새 판으로 공개한다. 문제가 있으면 `FORM_INVALID`, `details`에 `{ path, message }` 목록(path는 정의 안 위치, 예: `fields[3].label.en`).',
+  description: '번역·좌표·이미지 크기 등 전체 검사(gusring-web-v2 validate.ts와 같은 규칙) 후 새 판으로 공개한다. 문제가 있으면 `FORM_INVALID`, `details`에 `{ fieldId?, message }` 목록. 본문 `baseUpdatedAt`(선택)을 주면 그 뒤 바뀐 초안은 `FORM_CONFLICT`.',
   request: { params: formIdParams, ...body(publishBody) },
   responses: {
-    200: ok('공개한 서식', adminFormItem),
+    200: ok('새 판 번호', publishResult),
     ...errors({ 400: 'COMMON_INVALID_INPUT', 404: 'FORM_NOT_FOUND', 409: 'FORM_CONFLICT', 422: 'FORM_INVALID', ...managerAuth }),
   },
 });
@@ -131,7 +131,7 @@ registry.registerPath({
   summary: '그 판을 초안으로 되돌리기',
   description: '초안만 바뀐다. 이용자에게 보이려면 다시 공개해야 한다.',
   request: { params: versionParams },
-  responses: { 200: ok('되돌린 서식', adminFormItem), ...errors({ 400: 'COMMON_INVALID_INPUT', 404: 'FORM_NOT_FOUND', 422: 'FORM_INVALID', ...auth }) },
+  responses: { 200: ok('되돌린 서식', adminFormItem), ...errors({ 400: 'COMMON_INVALID_INPUT', 404: 'FORM_NOT_FOUND · FORM_VERSION_NOT_FOUND', 422: 'FORM_INVALID', ...auth }) },
 });
 registry.registerPath({
   method: 'post', path: '/api/v1/admin/form-images', tags, security: adminSecurity,

@@ -5,13 +5,10 @@ import { auditRepository } from '../audit/audit.repository.js';
 import { validateDefinition, type Problem } from './form-validate.js';
 import { formRepository as repo, isUniqueViolation } from './form.repository.js';
 import {
-  formDefinition, type CreateFormBody, type FormDefinition, type PublishBody, type SaveDraftBody,
+  asDefinition, formDefinition, type CreateFormBody, type FormDefinition, type PublishBody, type SaveDraftBody,
 } from './form.schema.js';
 
 type Db = Parameters<Parameters<typeof repo.transaction>[0]>[0];
-
-/** 이용자 화면이 쪽 이미지를 받는 주소 (같은 서버 기준 절대 경로) */
-export const imageUrl = (id: string) => `/api/v1/form-images/${id}`;
 
 const emptyL = () => ({ ko: '', en: '', zh: '', ja: '', vi: '' });
 
@@ -23,8 +20,8 @@ export const emptyDefinition = (): FormDefinition => ({
 /** DB에 저장된 정의를 다시 모양 검사 (저장할 때 검사했지만 스키마가 바뀌었을 수 있다) */
 function parseStored(value: unknown): { def: FormDefinition } | { problems: Problem[] } {
   const r = formDefinition.safeParse(value);
-  if (r.success) return { def: r.data };
-  return { problems: r.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) };
+  if (r.success) return { def: asDefinition(r.data) };
+  return { problems: r.error.issues.map((i) => ({ message: `${i.path.join('.')}: ${i.message}` })) };
 }
 
 async function assertFree(db: Db, key: string, formNo: number, exceptId?: string) {
@@ -49,19 +46,27 @@ async function lockOrNotFound(tx: Db, id: string) {
   return form;
 }
 
+/** baseUpdatedAt은 받은 draftUpdatedAt(ISO 문자열) 그대로와 비교한다 */
 function checkBase(form: { draftUpdatedAt: Date; draftUpdatedBy: string }, base: string | undefined) {
-  if (base === undefined || new Date(base).getTime() === form.draftUpdatedAt.getTime()) return;
+  if (base === undefined || base === form.draftUpdatedAt.toISOString()) return;
   throw new AppError(
     'FORM_CONFLICT',
-    `${form.draftUpdatedBy}님이 ${form.draftUpdatedAt.toISOString()}에 먼저 저장했습니다. 다시 불러와 주세요.`,
+    `${form.draftUpdatedBy}님이 먼저 저장했습니다. 다시 불러와 주세요.`,
+    { draftUpdatedAt: form.draftUpdatedAt.toISOString(), draftUpdatedBy: form.draftUpdatedBy },
   );
 }
 
 async function adminItem(db: Db, id: string) {
   const form = await repo.findById(id, db);
   if (!form) throw new AppError('FORM_NOT_FOUND');
-  const { draft, ...meta } = form;
-  return { ...meta, definition: draft as unknown as FormDefinition, hasUnpublishedChanges: await repo.draftDiffers(db, id) };
+  return form;
+}
+
+/** 공개 전 검사: web-v2와 같은 규칙 + 서버에 없는 이미지 */
+async function problemsOf(db: Db, def: FormDefinition): Promise<Problem[]> {
+  const sizes = await repo.findImageSizes(db, def.pages.map((p) => p.imageId));
+  const missing = def.pages.flatMap((p, i) => (sizes.has(p.imageId) ? [] : [{ message: `${i + 1}쪽 이미지가 서버에 없음 (${p.imageId})` }]));
+  return [...missing, ...validateDefinition(def, (imageId) => sizes.get(imageId))];
 }
 
 export const formService = {
@@ -71,12 +76,11 @@ export const formService = {
     return rows.map((r) => ({ key: r.key, formNo: r.form_no, category: r.category, title: r.title, desc: r.desc, version: r.version }));
   },
 
+  /** 쪽 이미지는 pages[].imageId 그대로 (받는 주소 /api/v1/form-images/{imageId}는 화면이 만든다) */
   async getPublished(key: string) {
     const row = await repo.findPublishedByKey(key);
     if (!row) throw new AppError('FORM_NOT_FOUND');
-    const def = row.definition as FormDefinition;
-    const pages = def.pages.map(({ imageId, ...rest }) => ({ image: imageUrl(imageId), ...rest }));
-    return { key: row.key, formNo: row.form_no, version: row.version, definition: { ...def, pages } };
+    return { key: row.key, formNo: row.form_no, version: row.version, definition: row.definition as FormDefinition };
   },
 
   async getImage(id: string) {
@@ -89,9 +93,9 @@ export const formService = {
   async listAdmin() {
     const rows = await repo.findAdminList();
     return rows.map((r) => ({
-      id: r.id, key: r.key, formNo: r.form_no, title: r.title, category: r.category,
+      id: r.id, key: r.key, formNo: r.form_no, category: r.category, title: r.title,
       draftUpdatedAt: r.draft_updated_at, draftUpdatedBy: r.draft_updated_by,
-      publishedVersion: r.published_version, hasUnpublishedChanges: r.has_unpublished_changes,
+      publishedVersion: r.published_version, publishedAt: r.published_at, hasUnpublishedChanges: r.has_unpublished_changes,
     }));
   },
 
@@ -119,41 +123,41 @@ export const formService = {
     }
   },
 
+  /** definition이 없으면 key·formNo만 바꾼다 */
   async saveDraft(id: string, body: SaveDraftBody, actor: string) {
+    let target = { key: body.key ?? '', formNo: body.formNo ?? 0 };
     try {
       const item = await repo.transaction(async (tx) => {
         const form = await lockOrNotFound(tx, id);
         checkBase(form, body.baseUpdatedAt);
-        const key = body.key ?? form.key;
-        const formNo = body.formNo ?? form.formNo;
-        if (key !== form.key || formNo !== form.formNo) await assertFree(tx, key, formNo, id);
+        target = { key: body.key ?? form.key, formNo: body.formNo ?? form.formNo };
+        if (target.key !== form.key || target.formNo !== form.formNo) await assertFree(tx, target.key, target.formNo, id);
         await repo.updateDraft(tx, id, { draft: body.definition, key: body.key, formNo: body.formNo, actor, at: new Date() });
         return adminItem(tx, id);
       });
       await auditRepository.log(actor, 'form.update', id, { key: item.key, formNo: item.formNo });
       return item;
     } catch (e) {
-      return rethrowTaken(e, body.key ?? '', body.formNo ?? 0, id);
+      return rethrowTaken(e, target.key, target.formNo, id);
     }
   },
 
-  /** 전체 검사 후 새 판. 문제가 있으면 FORM_INVALID + details */
+  /** 전체 검사 후 새 판. 문제가 있으면 FORM_INVALID + details [{ fieldId?, message }] */
   async publish(id: string, body: PublishBody, actor: string) {
-    const item = await repo.transaction(async (tx) => {
+    const { key, version } = await repo.transaction(async (tx) => {
       const form = await lockOrNotFound(tx, id);
       checkBase(form, body.baseUpdatedAt);
       const parsed = parseStored(form.draft);
       if ('problems' in parsed) throw new AppError('FORM_INVALID', undefined, parsed.problems);
-      const sizes = await repo.findImageSizes(tx, parsed.def.pages.map((p) => p.imageId));
-      const problems = validateDefinition(parsed.def, sizes);
+      const problems = await problemsOf(tx, parsed.def);
       if (problems.length) throw new AppError('FORM_INVALID', undefined, problems);
-      const version = (await repo.lastVersion(tx, id)) + 1;
-      await repo.insertVersion(tx, id, version, parsed.def, actor);
-      await repo.setPublished(tx, id, version);
-      return adminItem(tx, id);
+      const next = (await repo.lastVersion(tx, id)) + 1;
+      await repo.insertVersion(tx, id, next, parsed.def, actor);
+      await repo.setPublished(tx, id, next);
+      return { key: form.key, version: next };
     });
-    await auditRepository.log(actor, 'form.publish', id, { key: item.key, version: item.publishedVersion });
-    return item;
+    await auditRepository.log(actor, 'form.publish', id, { key, version });
+    return { version };
   },
 
   /** 지운 서식은 이용자에게 안 보이고 관리자 목록에서도 빠진다. 판은 남긴다 */
@@ -168,8 +172,7 @@ export const formService = {
   async versions(id: string) {
     const form = await repo.findById(id);
     if (!form) throw new AppError('FORM_NOT_FOUND');
-    const rows = await repo.listVersions(id);
-    return rows.map((v) => ({ ...v, isPublished: v.version === form.publishedVersion }));
+    return repo.listVersions(id);
   },
 
   /** 그 판을 초안으로 복사한다 (공개는 따로) */
@@ -177,7 +180,7 @@ export const formService = {
     const item = await repo.transaction(async (tx) => {
       await lockOrNotFound(tx, id);
       const v = await repo.findVersion(tx, id, version);
-      if (!v) throw new AppError('FORM_NOT_FOUND', `${version}판이 없습니다.`);
+      if (!v) throw new AppError('FORM_VERSION_NOT_FOUND', `${version}판이 없습니다.`);
       const parsed = parseStored(v.definition);
       if ('problems' in parsed) throw new AppError('FORM_INVALID', undefined, parsed.problems);
       await repo.updateDraft(tx, id, { draft: parsed.def, actor, at: new Date() });

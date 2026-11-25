@@ -43,6 +43,7 @@ export const ERROR_CODE = {
   FORM_CONFLICT: { status: 409, message: '다른 관리자가 먼저 저장했습니다. 다시 불러와 주세요.' },
   /** 공개 전 검사 실패. details에 문제 목록 */
   FORM_INVALID: { status: 422, message: '서식 정의에 고칠 곳이 있어 공개하지 못했습니다.' },
+  FORM_VERSION_NOT_FOUND: { status: 404, message: '그 판이 없습니다.' },
   FORM_IMAGE_INVALID: { status: 400, message: 'PNG 이미지가 아닙니다.' },
   FORM_IMAGE_NOT_FOUND: { status: 404, message: '서식 이미지가 없습니다.' },
 

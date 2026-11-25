@@ -50,7 +50,7 @@ async function createForm(key = 'birth-report', formNo = 4, agent = staff) {
   expect(img.status).toBe(201);
   const res = await agent.post('/api/v1/admin/forms').set('Origin', base).send({ key, formNo, definition: validDefinition(img.body.data.id) });
   expect(res.status).toBe(201);
-  return res.body.data as { id: string; draftUpdatedAt: string; definition: ReturnType<typeof validDefinition> };
+  return res.body.data as { id: string; draftUpdatedAt: string; draft: ReturnType<typeof validDefinition> };
 }
 const publish = (id: string, agent = manager) => agent.post(`/api/v1/admin/forms/${id}/publish`).set('Origin', base);
 const save = (id: string, body: object, agent = staff) => agent.patch(`/api/v1/admin/forms/${id}`).set('Origin', base).send(body);
@@ -115,10 +115,11 @@ describe('쪽 이미지 받기 (공개)', () => {
 describe('서식 만들기·초안 저장', () => {
   it('만들면 초안만 (공개 안 됨), 관리자 목록에는 보인다', async () => {
     const form = await createForm();
-    expect(form).toMatchObject({ key: 'birth-report', formNo: 4, draftUpdatedBy: 'worker', publishedVersion: null, hasUnpublishedChanges: true });
+    expect(Object.keys(form).sort()).toEqual(['draft', 'draftUpdatedAt', 'draftUpdatedBy', 'formNo', 'id', 'key', 'publishedVersion']);
+    expect(form).toMatchObject({ key: 'birth-report', formNo: 4, draftUpdatedBy: 'worker', publishedVersion: null });
     const list = await staff.get('/api/v1/admin/forms');
     expect(list.body.data).toEqual([
-      expect.objectContaining({ id: form.id, key: 'birth-report', formNo: 4, title: L('출생신고서'), category: 'FAMILY', publishedVersion: null, hasUnpublishedChanges: true }),
+      expect.objectContaining({ id: form.id, key: 'birth-report', formNo: 4, title: L('출생신고서'), category: 'FAMILY', publishedVersion: null, publishedAt: null, hasUnpublishedChanges: true }),
     ]);
     expect((await request(base).get('/api/v1/forms')).body.data).toEqual([]);
     expect((await request(base).get('/api/v1/forms/birth-report')).body.error.code).toBe('FORM_NOT_FOUND');
@@ -128,10 +129,10 @@ describe('서식 만들기·초안 저장', () => {
     const src = await createForm();
     const empty = await staff.post('/api/v1/admin/forms').set('Origin', base).send({ key: 'empty', formNo: 5 });
     expect(empty.status).toBe(201);
-    expect(empty.body.data.definition).toMatchObject({ pages: [], fields: [], sections: [], category: 'CERT' });
+    expect(empty.body.data.draft).toMatchObject({ pages: [], fields: [], sections: [], category: 'CERT' });
     const copy = await staff.post('/api/v1/admin/forms').set('Origin', base).send({ key: 'copy', formNo: 6, copyFrom: src.id });
-    expect(copy.body.data.definition).toEqual(src.definition);
-    const both = await staff.post('/api/v1/admin/forms').set('Origin', base).send({ key: 'x', formNo: 7, copyFrom: src.id, definition: src.definition });
+    expect(copy.body.data.draft).toEqual(src.draft);
+    const both = await staff.post('/api/v1/admin/forms').set('Origin', base).send({ key: 'x', formNo: 7, copyFrom: src.id, definition: src.draft });
     expect(both.body.error.code).toBe('COMMON_INVALID_INPUT');
     const missing = await staff.post('/api/v1/admin/forms').set('Origin', base).send({ key: 'y', formNo: 8, copyFrom: '4649b09e-ccef-4a29-bd1e-4765fabae66b' });
     expect(missing.body.error.code).toBe('FORM_NOT_FOUND');
@@ -143,20 +144,21 @@ describe('서식 만들기·초안 저장', () => {
     const send = (body: object) => staff.post('/api/v1/admin/forms').set('Origin', base).send(body);
     expect((await send({ key: 'a-form', formNo: 9 })).body.error.code).toBe('FORM_KEY_TAKEN');
     expect((await send({ key: 'c-form', formNo: 1 })).body.error.code).toBe('FORM_NO_TAKEN');
-    const res = await save(b.id, { definition: b.definition, key: 'a-form', baseUpdatedAt: b.draftUpdatedAt });
+    const res = await save(b.id, { definition: b.draft, key: 'a-form', baseUpdatedAt: b.draftUpdatedAt });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('FORM_KEY_TAKEN');
-    expect((await save(b.id, { definition: b.definition, formNo: 1, baseUpdatedAt: b.draftUpdatedAt })).body.error.code).toBe('FORM_NO_TAKEN');
-    const renamed = await save(a.id, { definition: a.definition, key: 'a-renamed', formNo: 3, baseUpdatedAt: a.draftUpdatedAt });
-    expect(renamed.body.data).toMatchObject({ key: 'a-renamed', formNo: 3 });
+    expect((await save(b.id, { definition: b.draft, formNo: 1, baseUpdatedAt: b.draftUpdatedAt })).body.error.code).toBe('FORM_NO_TAKEN');
+    // definition 없이 key·번호만 바꿀 수 있다
+    const renamed = await save(a.id, { key: 'a-renamed', formNo: 3, baseUpdatedAt: a.draftUpdatedAt });
+    expect(renamed.body.data).toMatchObject({ key: 'a-renamed', formNo: 3, draft: a.draft });
   });
 
   it('초안은 번역이 비어도 저장되지만, 모르는 칸·틀린 모양은 400', async () => {
     const form = await createForm();
-    const draft = { ...form.definition, title: { ...form.definition.title, vi: '' } };
+    const draft = { ...form.draft, title: { ...form.draft.title, vi: '' } };
     const ok = await save(form.id, { definition: draft, baseUpdatedAt: form.draftUpdatedAt });
     expect(ok.status).toBe(200);
-    expect(ok.body.data.definition.title.vi).toBe('');
+    expect(ok.body.data.draft.title.vi).toBe('');
 
     for (const bad of [
       { ...draft, extra: 1 },
@@ -172,23 +174,27 @@ describe('서식 만들기·초안 저장', () => {
 
   it('다른 사람이 먼저 저장했으면 FORM_CONFLICT (덮어쓰지 않는다)', async () => {
     const form = await createForm();
-    const first = await save(form.id, { definition: { ...form.definition, category: 'CERT' }, baseUpdatedAt: form.draftUpdatedAt }, manager);
+    const first = await save(form.id, { definition: { ...form.draft, category: 'CERT' }, baseUpdatedAt: form.draftUpdatedAt }, manager);
     expect(first.status).toBe(200);
     expect(first.body.data.draftUpdatedBy).toBe('boss');
-    const second = await save(form.id, { definition: { ...form.definition, category: 'VEHICLE' }, baseUpdatedAt: form.draftUpdatedAt });
+    const second = await save(form.id, { definition: { ...form.draft, category: 'VEHICLE' }, baseUpdatedAt: form.draftUpdatedAt });
     expect(second.status).toBe(409);
     expect(second.body.error.code).toBe('FORM_CONFLICT');
     expect(second.body.message).toContain('boss');
-    expect((await staff.get(`/api/v1/admin/forms/${form.id}`)).body.data.definition.category).toBe('CERT');
+    expect(second.body.error.details).toEqual({ draftUpdatedAt: first.body.data.draftUpdatedAt, draftUpdatedBy: 'boss' });
+    expect((await staff.get(`/api/v1/admin/forms/${form.id}`)).body.data.draft.category).toBe('CERT');
+    // 같은 시각이라도 문자열이 다르면(받은 값을 그대로 보내지 않음) 충돌로 본다
+    const sameInstant = first.body.data.draftUpdatedAt.replace('Z', '+00:00');
+    expect((await save(form.id, { definition: form.draft, baseUpdatedAt: sameInstant })).body.error.code).toBe('FORM_CONFLICT');
     // 새 기준으로 다시 저장하면 된다
-    expect((await save(form.id, { definition: form.definition, baseUpdatedAt: first.body.data.draftUpdatedAt })).status).toBe(200);
+    expect((await save(form.id, { definition: form.draft, baseUpdatedAt: first.body.data.draftUpdatedAt })).status).toBe(200);
   });
 
   it('100KB가 넘는 정의도 저장된다 (1MB까지)', async () => {
     const form = await createForm();
     const long = 'あ'.repeat(1000);
-    const fields = Array.from({ length: 40 }, (_, i) => ({ ...form.definition.fields[0]!, id: `f${i}`, help: { ko: long, en: long, zh: long, ja: long, vi: long } }));
-    const big = { ...form.definition, fields };
+    const fields = Array.from({ length: 40 }, (_, i) => ({ ...form.draft.fields[0]!, id: `f${i}`, help: { ko: long, en: long, zh: long, ja: long, vi: long } }));
+    const big = { ...form.draft, fields };
     expect(JSON.stringify(big).length).toBeGreaterThan(200_000);
     const res = await save(form.id, { definition: big, baseUpdatedAt: form.draftUpdatedAt });
     expect(res.status).toBe(200);
@@ -203,7 +209,7 @@ describe('서식 만들기·초안 저장', () => {
 
   it('쿠키로 POST·PATCH·DELETE는 같은 출처에서만 (조회는 상관없음)', async () => {
     const form = await createForm();
-    const body = { definition: form.definition, baseUpdatedAt: form.draftUpdatedAt };
+    const body = { definition: form.draft, baseUpdatedAt: form.draftUpdatedAt };
     const reqs = [
       staff.post('/api/v1/admin/forms').send({ key: 'other', formNo: 9 }),
       staff.patch(`/api/v1/admin/forms/${form.id}`).send(body),
@@ -250,35 +256,35 @@ describe('공개', () => {
     const form = await createForm();
     const res = await publish(form.id);
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ publishedVersion: 1, hasUnpublishedChanges: false });
+    expect(res.body.data).toEqual({ version: 1 });
+    expect((await staff.get('/api/v1/admin/forms')).body.data[0]).toMatchObject({ publishedVersion: 1, publishedAt: expect.any(String), hasUnpublishedChanges: false });
 
     const list = await request(base).get('/api/v1/forms');
     expect(list.body.data).toEqual([{ key: 'birth-report', formNo: 4, category: 'FAMILY', title: L('출생신고서'), desc: L('아이가 태어났을 때'), version: 1 }]);
 
     const detail = (await request(base).get('/api/v1/forms/birth-report')).body.data;
     expect(detail).toMatchObject({ key: 'birth-report', formNo: 4, version: 1 });
-    const { pages, ...rest } = detail.definition;
-    expect(pages).toEqual([{ image: `/api/v1/form-images/${sha256(png)}`, width: 200, height: 300 }]);
-    const { pages: _p, ...expected } = form.definition;
-    expect(rest).toEqual(expected);
-    expect((await request(base).get(pages[0].image)).status).toBe(200);
+    // 저장한 정의 그대로 (이미지 주소는 화면이 imageId로 만든다)
+    expect(detail.definition).toEqual(form.draft);
+    expect(detail.definition.pages[0].imageId).toBe(sha256(png));
+    expect((await request(base).get(`/api/v1/form-images/${detail.definition.pages[0].imageId}`)).status).toBe(200);
   });
 
   it('공개한 뒤 초안을 고쳐도 이용자에게는 공개한 판, 다시 공개하면 2판', async () => {
     const form = await createForm();
     await publish(form.id);
-    const saved = await save(form.id, { definition: { ...form.definition, title: L('바뀐 제목') }, baseUpdatedAt: form.draftUpdatedAt });
-    expect(saved.body.data.hasUnpublishedChanges).toBe(true);
+    const saved = await save(form.id, { definition: { ...form.draft, title: L('바뀐 제목') }, baseUpdatedAt: form.draftUpdatedAt });
+    expect(saved.status).toBe(200);
     expect((await request(base).get('/api/v1/forms')).body.data[0].title).toEqual(L('출생신고서'));
     expect((await staff.get('/api/v1/admin/forms')).body.data[0].hasUnpublishedChanges).toBe(true);
 
-    expect((await publish(form.id)).body.data.publishedVersion).toBe(2);
+    expect((await publish(form.id)).body.data).toEqual({ version: 2 });
     expect((await request(base).get('/api/v1/forms/birth-report')).body.data.definition.title).toEqual(L('바뀐 제목'));
   });
 
   it('검사에 걸리면 FORM_INVALID 422 + 문제 목록, 판을 만들지 않는다', async () => {
     const form = await createForm();
-    const def = form.definition;
+    const def = form.draft;
     const broken = {
       ...def,
       title: { ...def.title, en: ' ' },
@@ -293,24 +299,26 @@ describe('공개', () => {
     const res = await publish(form.id);
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe('FORM_INVALID');
-    const paths = (res.body.error.details as { path: string; message: string }[]).map((d) => d.path);
-    expect(paths).toEqual(expect.arrayContaining([
-      'title.en', 'pages[0]', 'fields[0].section', 'fields[1].id', 'fields[2].id',
+    expect(res.body.error.details).toEqual(expect.arrayContaining([
+      { message: '제목 en 비어 있음' },
+      { message: '1쪽 크기 201×300 ↔ 실제 이미지 200×300' },
+      { fieldId: 'child', message: '없는 섹션 nowhere' },
+      { fieldId: 'child', message: '칸 id 중복' },
+      { fieldId: '1bad', message: '칸 id는 영문자로 시작하는 영문·숫자·_·- 64자 이내' },
     ]));
-    expect(res.body.error.details[0]).toEqual({ path: expect.any(String), message: expect.any(String) });
     expect(await prisma().formVersion.count()).toBe(0);
   });
 
   it('올리지 않은 이미지를 가리키면 공개 불가', async () => {
     const form = await createForm();
-    await save(form.id, { definition: { ...form.definition, pages: [{ imageId: 'a'.repeat(64), width: 200, height: 300 }] }, baseUpdatedAt: form.draftUpdatedAt });
+    await save(form.id, { definition: { ...form.draft, pages: [{ imageId: 'a'.repeat(64), width: 200, height: 300 }] }, baseUpdatedAt: form.draftUpdatedAt });
     const res = await publish(form.id);
-    expect(res.body.error.details).toEqual([{ path: 'pages[0].imageId', message: expect.stringContaining('이미지 없음') }]);
+    expect(res.body.error.details).toEqual([{ message: expect.stringContaining('1쪽 이미지가 서버에 없음') }]);
   });
 
   it('baseUpdatedAt을 주면 그 뒤 바뀐 초안은 공개하지 않는다', async () => {
     const form = await createForm();
-    await save(form.id, { definition: form.definition, baseUpdatedAt: form.draftUpdatedAt });
+    await save(form.id, { definition: form.draft, baseUpdatedAt: form.draftUpdatedAt });
     const res = await manager.post(`/api/v1/admin/forms/${form.id}/publish`).set('Origin', base).send({ baseUpdatedAt: form.draftUpdatedAt });
     expect(res.body.error.code).toBe('FORM_CONFLICT');
   });
@@ -320,26 +328,27 @@ describe('판 목록·되돌리기', () => {
   it('되돌리면 그 판이 초안으로 (공개한 판은 그대로), 다시 공개하면 새 판', async () => {
     const form = await createForm();
     await publish(form.id);
-    const v2 = { ...form.definition, title: L('2판') };
+    const v2 = { ...form.draft, title: L('2판') };
     await save(form.id, { definition: v2, baseUpdatedAt: form.draftUpdatedAt });
     await publish(form.id);
 
     const versions = await staff.get(`/api/v1/admin/forms/${form.id}/versions`);
     expect(versions.body.data).toEqual([
-      { version: 2, publishedBy: 'boss', publishedAt: expect.any(String), isPublished: true },
-      { version: 1, publishedBy: 'boss', publishedAt: expect.any(String), isPublished: false },
+      { version: 2, publishedBy: 'boss', publishedAt: expect.any(String) },
+      { version: 1, publishedBy: 'boss', publishedAt: expect.any(String) },
     ]);
 
     const res = await staff.post(`/api/v1/admin/forms/${form.id}/versions/1/restore`).set('Origin', base);
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ publishedVersion: 2, hasUnpublishedChanges: true, draftUpdatedBy: 'worker' });
-    expect(res.body.data.definition).toEqual(form.definition);
+    expect(res.body.data).toMatchObject({ publishedVersion: 2, draftUpdatedBy: 'worker' });
+    expect(res.body.data.draft).toEqual(form.draft);
+    expect((await staff.get('/api/v1/admin/forms')).body.data[0].hasUnpublishedChanges).toBe(true);
     expect((await request(base).get('/api/v1/forms/birth-report')).body.data.version).toBe(2);
-    expect((await publish(form.id)).body.data.publishedVersion).toBe(3);
+    expect((await publish(form.id)).body.data).toEqual({ version: 3 });
 
     const missing = await staff.post(`/api/v1/admin/forms/${form.id}/versions/9/restore`).set('Origin', base);
     expect(missing.status).toBe(404);
-    expect(missing.body.error.code).toBe('FORM_NOT_FOUND');
+    expect(missing.body.error.code).toBe('FORM_VERSION_NOT_FOUND');
   });
 });
 
@@ -363,7 +372,7 @@ describe('지우기', () => {
 describe('관리 기록', () => {
   it('만들기·저장·공개·되돌리기·지우기·이미지 올리기를 남긴다', async () => {
     const form = await createForm();
-    await save(form.id, { definition: form.definition, baseUpdatedAt: form.draftUpdatedAt });
+    await save(form.id, { definition: form.draft, baseUpdatedAt: form.draftUpdatedAt });
     await publish(form.id);
     await staff.post(`/api/v1/admin/forms/${form.id}/versions/1/restore`).set('Origin', base);
     await manager.delete(`/api/v1/admin/forms/${form.id}`).set('Origin', base);
@@ -386,21 +395,21 @@ describe('한꺼번에 넣기 (forms:import)', () => {
   });
 
   it('이미지·서식을 넣고 1판 공개, 다시 돌리면 건너뛴다. 검사에 걸리면 초안만', async () => {
-    const page = { image: 'p1.png', width: 200, height: 300 };
+    const page = { imageId: 'p1.png', width: 200, height: 300 };
     const { pages: _p, ...def } = validDefinition('x'.repeat(64));
     await writeFile(join(dir, 'p1.png'), png);
     await writeFile(join(dir, 'forms.json'), JSON.stringify([
       { key: 'birth-report', formNo: 4, definition: { ...def, pages: [page] } },
       { key: 'broken', formNo: 5, definition: { ...def, title: { ...def.title, ja: '' }, pages: [page] } },
-      { key: 'escape', formNo: 6, definition: { ...def, pages: [{ ...page, image: '../p1.png' }] } },
+      { key: 'escape', formNo: 6, definition: { ...def, pages: [{ ...page, imageId: '../p1.png' }] } },
     ]));
     const lines: string[] = [];
     const first = await importForms(dir, (l) => lines.push(l));
     expect(first).toEqual({ created: ['birth-report'], skipped: [], failed: ['broken', 'escape'] });
-    expect(lines.join('\n')).toContain('title.ja');
+    expect(lines.join('\n')).toContain('제목 ja 비어 있음');
 
     const pub = (await request(base).get('/api/v1/forms/birth-report')).body.data;
-    expect(pub.definition.pages[0].image).toBe(`/api/v1/form-images/${sha256(png)}`);
+    expect(pub.definition.pages[0].imageId).toBe(sha256(png));
     const v = await prisma().formVersion.findFirstOrThrow();
     expect(v.publishedBy).toBe('import');
     expect(await prisma().formImage.count()).toBe(1);

@@ -53,8 +53,8 @@ export const formController = {
   }) satisfies RequestHandler,
 
   publish: (async (_req, res) => {
-    const item = await formService.publish(params<IdParams>(res).id, res.locals.body as PublishBody, actor(res));
-    sendSuccess(res, { message: `${item.publishedVersion}판을 공개했습니다.`, data: item });
+    const data = await formService.publish(params<IdParams>(res).id, res.locals.body as PublishBody, actor(res));
+    sendSuccess(res, { message: `${data.version}판을 공개했습니다.`, data });
   }) satisfies RequestHandler,
 
   versions: (async (_req, res) => {

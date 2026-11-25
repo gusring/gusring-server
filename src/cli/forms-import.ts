@@ -2,7 +2,8 @@
 //   로컬:  npm run forms:import <폴더>
 //   NAS:   docker compose cp <폴더> app:/tmp/forms
 //          docker compose exec app node dist/cli/forms-import.js /tmp/forms
-// 폴더에는 forms.json([{ key, formNo, definition }])과 PNG들. definition.pages[].image는 같은 폴더의 PNG 파일 이름.
+// 폴더에는 forms.json([{ key, formNo, definition }])과 PNG들 (gusring-web-v2 `npm run export:forms`가 만든다).
+// definition.pages[].imageId는 같은 폴더의 PNG 파일 이름 → 넣은 이미지의 SHA-256 id로 바꾼다.
 // 이미지를 넣고, 서식을 만들고, 검사를 통과하면 1판으로 공개한다 (기록의 actor는 'import').
 // 같은 key가 이미 있으면(지운 서식 포함) 건너뛴다 → 여러 번 돌려도 된다.
 import { readFile } from 'node:fs/promises';
@@ -10,14 +11,14 @@ import { basename, join, resolve } from 'node:path';
 import { z } from '../config/zod.js';
 import { disconnectPrisma } from '../config/prisma.js';
 import { formRepository } from '../domains/form/form.repository.js';
-import { formDefinition, formPage } from '../domains/form/form.schema.js';
+import { asDefinition, formDefinition, formPage } from '../domains/form/form.schema.js';
 import { formService } from '../domains/form/form.service.js';
 import { formKeySchema, formNoSchema } from '../utils/common-schema.js';
 import { AppError } from '../utils/response.js';
 
 const ACTOR = 'import';
 
-const importPage = formPage.omit({ imageId: true }).extend({ image: z.string().min(1) }).strict();
+const importPage = formPage.extend({ imageId: z.string().min(1).max(200).openapi({ description: 'PNG 파일 이름' }) }).strict();
 const importItem = z
   .object({
     key: formKeySchema,
@@ -49,7 +50,7 @@ export async function importForms(dir: string, log: (line: string) => void = con
     }
     try {
       const pages = [];
-      for (const { image, ...page } of item.definition.pages) {
+      for (const { imageId: image, ...page } of item.definition.pages) {
         // 폴더 밖 파일은 읽지 않는다
         if (basename(image) !== image) throw new Error(`이미지 이름에 경로가 있음 (${image})`);
         let id = imageIds.get(image);
@@ -59,14 +60,17 @@ export async function importForms(dir: string, log: (line: string) => void = con
         }
         pages.push({ ...page, imageId: id });
       }
-      const form = await formService.create({ key: item.key, formNo: item.formNo, definition: { ...item.definition, pages } }, ACTOR);
+      const definition = asDefinition({ ...item.definition, pages });
+      const form = await formService.create({ key: item.key, formNo: item.formNo, definition }, ACTOR);
       try {
         await formService.publish(form.id, {}, ACTOR);
         log(`✓ ${where}: 1판 공개`);
         result.created.push(item.key);
       } catch (e) {
         if (!(e instanceof AppError && e.code === 'FORM_INVALID')) throw e;
-        const details = (e.details as { path: string; message: string }[]).map((p) => `    ${p.path}: ${p.message}`).join('\n');
+        const details = (e.details as { fieldId?: string; message: string }[])
+          .map((p) => `    ${p.fieldId ? `${p.fieldId}: ` : ''}${p.message}`)
+          .join('\n');
         log(`✗ ${where}: 초안만 만들고 공개하지 못함\n${details}`);
         result.failed.push(item.key);
       }

@@ -13,12 +13,13 @@ const publishedJoin = Prisma.sql`
 
 export type AdminFormRow = {
   id: string; key: string; form_no: number; title: unknown; category: string;
-  draft_updated_at: Date; draft_updated_by: string; published_version: number | null; has_unpublished_changes: boolean;
+  draft_updated_at: Date; draft_updated_by: string; published_version: number | null; published_at: Date | null;
+  has_unpublished_changes: boolean;
 };
 
 const adminMeta = {
   id: true, key: true, formNo: true, draft: true, draftUpdatedAt: true, draftUpdatedBy: true,
-  publishedVersion: true, createdAt: true,
+  publishedVersion: true,
 } as const;
 
 export const formRepository = {
@@ -44,7 +45,7 @@ export const formRepository = {
   /** jsonb 비교라 칸 순서가 달라도 같은 내용이면 같다고 본다 */
   findAdminList: () => prisma().$queryRaw<AdminFormRow[]>`
     SELECT f.id, f.key, f.form_no, f.draft->'title' AS title, f.draft->>'category' AS category,
-           f.draft_updated_at, f.draft_updated_by, f.published_version,
+           f.draft_updated_at, f.draft_updated_by, f.published_version, v.published_at,
            (v.definition IS NULL OR v.definition <> f.draft) AS has_unpublished_changes
     FROM form f LEFT JOIN form_version v ON v.form_id = f.id AND v.version = f.published_version
     WHERE f.deleted_at IS NULL
@@ -57,15 +58,6 @@ export const formRepository = {
   lock: async (tx: Db, id: string) => {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM form WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`;
     return rows.length > 0;
-  },
-
-  /** 초안이 공개한 판과 다른지 */
-  draftDiffers: async (db: Db, id: string) => {
-    const rows = await db.$queryRaw<{ differs: boolean }[]>`
-      SELECT (v.definition IS NULL OR v.definition <> f.draft) AS differs
-      FROM form f LEFT JOIN form_version v ON v.form_id = f.id AND v.version = f.published_version
-      WHERE f.id = ${id}::uuid`;
-    return rows[0]?.differs ?? true;
   },
 
   /** 지운 서식도 key·formNo 자리를 차지한다 */
@@ -83,10 +75,10 @@ export const formRepository = {
       select: { id: true },
     }),
 
-  updateDraft: (db: Db, id: string, data: { draft: FormDefinition; key?: string; formNo?: number; actor: string; at: Date }) =>
+  updateDraft: (db: Db, id: string, data: { draft?: FormDefinition; key?: string; formNo?: number; actor: string; at: Date }) =>
     db.form.update({
       where: { id },
-      data: { draft: json(data.draft), key: data.key, formNo: data.formNo, draftUpdatedAt: data.at, draftUpdatedBy: data.actor },
+      data: { draft: data.draft && json(data.draft), key: data.key, formNo: data.formNo, draftUpdatedAt: data.at, draftUpdatedBy: data.actor },
     }),
 
   softDelete: (db: Db, id: string) =>
