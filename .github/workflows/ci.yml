@@ -50,7 +50,8 @@ jobs:
         run: |
           fail=0
           for pair in api-docs/swagger-ui-bundle.js:javascript api-docs/swagger-ui.css:text/css \
-                      admin/:text/html admin/admin.js:javascript admin/admin.css:text/css admin/form-names.json:application/json; do
+                      admin/:text/html admin/admin.js:javascript admin/admin.css:text/css admin/form-names.json:application/json \
+                      admin/forms/:text/html admin/forms/some/page:text/html; do
             path=${pair%%:*}; want=${pair#*:}
             type=$(curl -fsS -o /dev/null -w '%{content_type}' "localhost:4000/$path") || type="(요청 실패)"
             case "$type" in *"$want"*) echo "OK   /$path $type" ;; *) echo "FAIL /$path $type (기대: $want)"; fail=1 ;; esac

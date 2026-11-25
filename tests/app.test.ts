@@ -84,6 +84,31 @@ describe('관리자 화면 /admin', () => {
   });
 });
 
+describe('서식 관리 화면 /admin/forms', () => {
+  it('/admin/forms → /admin/forms/, 화면 안 경로는 index.html (SPA), 같은 CSP', async () => {
+    expect((await request(app).get('/admin/forms')).headers.location).toBe('/admin/forms/');
+    for (const path of ['/admin/forms/', '/admin/forms/edit/4649b09e-ccef-4a29-bd1e-4765fabae66b', '/admin/forms/new']) {
+      const res = await request(app).get(path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers['content-type'], path).toContain('text/html');
+      expect(res.text, path).toContain('서식 관리');
+      expect(res.headers['content-security-policy'], path).toContain("script-src 'self'");
+    }
+  });
+
+  it('없는 파일(확장자 있음)은 index.html이 아니라 공통 404', async () => {
+    const res = await request(app).get('/admin/forms/assets/nope.js');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('COMMON_NOT_FOUND');
+  });
+
+  it('관리자 화면에 서식 관리로 가는 링크가 있고, 기존 화면은 그대로', async () => {
+    const page = await request(app).get('/admin/');
+    expect(page.text).toContain('<a href="forms/" class="link-button">서식 관리</a>');
+    expect(page.text).toContain('<script src="admin.js" defer></script>');
+  });
+});
+
 describe('JSON 본문', () => {
   it('깨진 JSON은 500이 아니라 400 COMMON_BAD_REQUEST', async () => {
     const res = await request(app).post('/api/v1/feedbacks').set('Content-Type', 'application/json').send('{bad');
@@ -95,7 +120,7 @@ describe('JSON 본문', () => {
 describe('에러 코드', () => {
   it('모두 {도메인}_{내용} 형식이고 HTTP 상태가 4xx·5xx다', () => {
     for (const [code, { status, message }] of Object.entries(ERROR_CODE)) {
-      expect(code).toMatch(/^(COMMON|AUTH|USER|FEEDBACK|EVENT|STATS)_[A-Z_]+$/);
+      expect(code).toMatch(/^(COMMON|AUTH|USER|FEEDBACK|EVENT|STATS|FORM)_[A-Z_]+$/);
       expect(status).toBeGreaterThanOrEqual(400);
       expect(message.length).toBeGreaterThan(0);
     }
@@ -134,6 +159,18 @@ describe('API 문서 (Swagger)', () => {
         'POST /api/v1/admin/users/{username}/password',
         'POST /api/v1/admin/users/{username}/unlock',
         'GET /api/v1/auth/me',
+        'GET /api/v1/forms',
+        'GET /api/v1/forms/{key}',
+        'GET /api/v1/form-images/{id}',
+        'GET /api/v1/admin/forms',
+        'POST /api/v1/admin/forms',
+        'GET /api/v1/admin/forms/{id}',
+        'PATCH /api/v1/admin/forms/{id}',
+        'DELETE /api/v1/admin/forms/{id}',
+        'POST /api/v1/admin/forms/{id}/publish',
+        'GET /api/v1/admin/forms/{id}/versions',
+        'POST /api/v1/admin/forms/{id}/versions/{version}/restore',
+        'POST /api/v1/admin/form-images',
       ].sort(),
     );
   });
@@ -145,6 +182,18 @@ describe('API 문서 (Swagger)', () => {
         expect(Boolean(op.security?.length), p).toBe(p.startsWith('/api/v1/admin/') || p === '/api/v1/auth/me' || p === '/api/v1/auth/password');
       }
     }
+  });
+
+  it('계정 관리자만 하는 경로(계정 관리·서식 공개·삭제)는 로그인 쿠키만 (토큰 없음)', async () => {
+    const { body } = await request(app).get('/api-docs.json');
+    const paths = body.paths as Record<string, Record<string, { security?: Record<string, unknown>[] }>>;
+    const managerOnly = [
+      paths['/api/v1/admin/forms/{id}']!.delete,
+      paths['/api/v1/admin/forms/{id}/publish']!.post,
+      ...Object.values(paths['/api/v1/admin/users']!),
+    ];
+    for (const op of managerOnly) expect(op!.security).toEqual([{ adminSession: [] }]);
+    expect(paths['/api/v1/admin/forms/{id}']!.patch!.security).toEqual([{ adminSession: [] }, { adminToken: [] }]);
   });
 
   it('/api-docs 화면이 열린다', async () => {

@@ -16,6 +16,7 @@
     "db:up": "docker compose up -d --wait",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "forms:import": "tsx --env-file-if-exists=.env src/cli/forms-import.ts",
     "postinstall": "prisma generate",
     "test:coverage": "vitest run --coverage"
   },

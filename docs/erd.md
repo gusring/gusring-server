@@ -6,7 +6,8 @@
 관리자 쪽 3개(`admin_user`, `admin_session`, `admin_audit_log`, 2026-11-04 추가)는 이용자 쪽과 이어지지 않는다. `admin_session`만 `admin_user`를 가리키고(계정을 지우면 세션도 지움), 관리 기록은 계정이 지워져도 남도록 아이디를 글자로 적는다.
 피드백과 이용 기록은 사람을 이어 붙이지 않으려고 일부러 따로 둔다 (피드백의 `ip_hash`와 이용 기록의 `visitor_id`는 같은 사람이어도 연결할 수 없다).
 글자 수·범위 제한은 DB가 아니라 API 검사(zod)에서 건다. 아래 그림의 "1~2000자" 같은 표시는 API 기준이다.
-서식(`form_key`·`form_no`)은 아직 DB에 서식 테이블이 없어 문자열·번호로만 적는다. 서식 데이터를 서버로 옮기는 단계에서 `form` 테이블과 관계를 만든다.
+서식 정의 테이블 3개(`form`, `form_version`, `form_image`, 2026-11-25 추가, 마이그레이션 `20261125050532_forms`)가 있다. 피드백·이용 기록의 `form_key`·`form_no`는 지운 서식·옛 기록도 남도록 외래 키 없이 글자·번호로 둔다.
+서식 정의 JSON(`draft`·`definition`)의 모양은 API 검사(zod `formDefinition`)에서 건다. `form_version`은 공개할 때마다 쌓기만 하고 고치지 않는다. 쪽 이미지는 `pages[].imageId`가 `form_image.id`를 글자로 가리킨다(외래 키 없음, 공개할 때 있는지 확인).
 
 ```mermaid
 erDiagram
@@ -63,9 +64,37 @@ erDiagram
     admin_audit_log {
         bigint      id            PK
         text        actor            "관리자 아이디 · token · cli"
-        text        action           "login · login_failed · logout · password_failed · feedback.status · feedback.delete · user.*"
-        text        target           "NULL 가능. 피드백 id·계정 아이디"
+        text        action           "login · login_failed · logout · password_failed · feedback.status · feedback.delete · user.* · form.* · form_image.upload"
+        text        target           "NULL 가능. 피드백 id·계정 아이디·서식 id·이미지 id"
         jsonb       detail           "NULL 가능. 피드백 본문은 넣지 않음"
+        timestamptz created_at
+    }
+
+    form ||--o{ form_version : "공개한 판"
+    form {
+        uuid        id                PK
+        text        key               UK "영어 kebab-case. 지운 서식도 자리 차지"
+        smallint    form_no           UK "1~999"
+        jsonb       draft                "고치는 중인 정의 전체"
+        timestamptz draft_updated_at     "ms 단위. 동시 저장 확인용"
+        text        draft_updated_by     "관리자 아이디 · token · import"
+        int         published_version    "NULL이면 이용자에게 안 보임"
+        timestamptz deleted_at           "NULL 가능. 지운 서식"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    form_version {
+        uuid        form_id       PK "form.id (지우지 않음: RESTRICT)"
+        int         version       PK "1부터"
+        jsonb       definition       "공개한 정의"
+        text        published_by
+        timestamptz published_at
+    }
+    form_image {
+        char64      id            PK "PNG 내용의 SHA-256 (같은 파일은 한 번만)"
+        int         width            "PNG 머리에서 읽음"
+        int         height
+        bytea       bytes            "4MB까지"
         timestamptz created_at
     }
 ```

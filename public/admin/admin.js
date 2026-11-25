@@ -284,6 +284,8 @@ const ACTION_NAMES = {
   'feedback.status': '피드백 상태 변경', 'feedback.delete': '피드백 삭제',
   'user.create': '계정 만듦', 'user.password': '비밀번호 바꿈', 'user.disable': '계정 막음', 'user.enable': '계정 풂', 'user.unlock': '잠금 풂',
   'user.role': '역할 바꿈',
+  'form.create': '서식 만듦', 'form.update': '서식 초안 저장', 'form.publish': '서식 공개', 'form.delete': '서식 지움',
+  'form.restore': '서식 판 되돌림', 'form_image.upload': '서식 이미지 올림',
 };
 const shortId = (s) => (s.length > 20 ? `${s.slice(0, 8)}…` : s);
 async function loadAudit() {
@@ -293,6 +295,7 @@ async function loadAudit() {
       let target = x.target ? shortId(x.target) : '';
       if (x.action === 'feedback.status' && x.detail) target += ` → ${STATUS_NAMES[x.detail.status] || x.detail.status}`;
       if (x.action === 'user.role' && x.detail) target += ` → ${ROLE_NAMES[x.detail.to] || x.detail.to}`;
+      if (x.action.startsWith('form.') && x.detail?.key) target = x.detail.version ? `${x.detail.key} ${x.detail.version}판` : x.detail.key;
       if (x.action === 'user.create' && x.detail) target += ` (${ROLE_NAMES[x.detail.role] || x.detail.role})`;
       const what = x.action === 'user.password' && x.detail && x.detail.temporary ? '비밀번호 초기화' : ACTION_NAMES[x.action] || x.action;
       return [new Date(x.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }), x.actor, what, target];

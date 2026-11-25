@@ -8,6 +8,8 @@ limit_req_zone $binary_remote_addr zone=events:10m rate=60r/m;
 limit_req_zone $binary_remote_addr zone=feedback:10m rate=10r/m;
 # 관리자 비밀번호 대입 막기 (앱에서도 같은 계정 5번 실패 시 15분 잠금)
 limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+# 공개 서식 정의·이미지 (한 서식 = 정의 1 + 쪽 이미지 1~4장. 이미지는 브라우저가 1년 캐시)
+limit_req_zone $binary_remote_addr zone=forms:10m rate=120r/m;
 limit_req_status 429;
 
 # Docker 내부 DNS. 서버 컨테이너가 다시 떠서 IP가 바뀌어도 따라간다
